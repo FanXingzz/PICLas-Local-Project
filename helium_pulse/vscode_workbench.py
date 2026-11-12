@@ -1,16 +1,20 @@
 """Local data and rendering bridge for the VS Code workbench."""
 import base64
+import hashlib
 from io import BytesIO
 import json
 import math
+from pathlib import Path
+import re
 import shutil
 import sys
+from tempfile import TemporaryDirectory
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
 from case_preflight import describe_case, fingerprints
-from record_model_settings import entries, record
+from record_model_settings import entries, record, settings_text
 from tube_cases import (
     AXIS_MESH_FIELDS, AXIS_MESH_PRESETS, DIAMETERS, TUBE_FIELDS, axis_mesh_values, configure_taper, format_length,
     new_case_directory, particle_search_parameters, plan_axisymmetric_tube, read_geometry, replace_parameters,
@@ -78,6 +82,76 @@ def run_status(directory):
     return ""
 
 
+def complete_log_tail(path):
+    """Read recent complete lines without loading growing diagnostics files."""
+    try:
+        with path.open("rb") as stream:
+            offset = max(0, stream.seek(0, 2) - 32768)
+            stream.seek(offset)
+            lines = stream.read(32768).split(b"\n")
+    except FileNotFoundError:
+        return ""
+    return b"\n".join(lines[bool(offset):-1]).decode("ascii", errors="replace")
+
+
+def run_progress(key=None):
+    cases = ROOT/"cases"
+    previous = (ROOT/key).resolve() if key else None
+    if previous and (previous.parent.name != "runs" or previous.parent.parent.parent != cases):
+        previous = None
+    state = run_status(previous) if previous else ""
+    run = previous if state == "running" else max(
+        (item for item in cases.glob("*/runs/*") if item.is_dir() and run_status(item) == "running"),
+        key=lambda item: item.name, default=None,
+    )
+    if run:
+        state = "running"
+    elif previous and state in {"complete", "failed", "stopped"}:
+        run = previous
+    else:
+        return None
+
+    case = run.parent.parent
+    label = case_info(case).get("display_name", case.name)
+    parameter_file = run/"parameter.ini"
+    params = parameter_file.read_text(encoding="utf-8-sig") if parameter_file.is_file() else ""
+    number = r"[0-9.EeDd+\-]+"
+    end_match = re.search(rf"(?im)^[ \t]*tend[ \t]*=[ \t]*({number})", params)
+    end = float(end_match[1].lower().replace("d", "e")) if end_match else None
+    log = run/"solver.log"
+    analysis = run/"PartAnalyze.csv"
+    tail = complete_log_tail(log)
+    stamps = re.findall(rf"(?im)^[ \t]*(?:iter:\s*\d+\s*time:|sim time\s*:)\s*({number})", tail)
+    stamps += re.findall(rf"(?m)^[ \t]*({number}),", complete_log_tail(analysis))[-1:]
+    current = max((float(stamp.lower().replace("d", "e")) for stamp in stamps), default=0.)
+    eta = None
+    if end and end > 0:
+        current = end if state == "complete" else min(current, end)
+        if state == "running" and current >= end * (1. - 1e-10):
+            state = "saving"
+        elif state == "running" and current > 0:
+            reports = re.findall(rf"(?im)^[ \t]*Time[ \t]*=[ \t]*({number})[^\n]*?\beta[ \t]*=[ \t]*([0-9:]+)", tail)
+            if reports:
+                stamp, duration = reports[-1]
+                remaining = end - float(stamp.lower().replace("d", "e"))
+                seconds = sum(int(part) * scale for part, scale in
+                              zip(reversed(duration.split(":")), (1, 60, 3600, 86400)))
+                if remaining > 0:
+                    eta = seconds * (end - current) / remaining
+            if eta is None:
+                start = run/"run-info.txt"
+                if start.is_file():
+                    latest = max(p.stat().st_mtime for p in (start, log, analysis) if p.is_file())
+                    elapsed = latest - start.stat().st_mtime
+                    if elapsed > 0:
+                        eta = elapsed * (end - current) / current
+    else:
+        end = None
+    return {"id": relative(run), "label": label, "state": state, "currentNs": current*1e9,
+            "endNs": end*1e9 if end else None, "percent": current/end*100 if end else None,
+            "etaSeconds": round(eta) if eta is not None else None}
+
+
 def catalog():
     models = []
     runs = [{"id": "nitrogen", "label": "氮气 · 原负流注", "case": None}]
@@ -95,11 +169,16 @@ def catalog():
             delete_block = ""
             if "running" in case_runs.values():
                 delete_block = "此算例正在运行。"
+            elif (directory/".parameters.lock").is_dir():
+                delete_block = "此算例正在保存参数或准备运行。"
             elif metadata.get("protect_from_deletion", False):
                 delete_block = "此算例已标为关键算例。"
-            models.append({"id": model_id, "label": f"D {format_length(geometry['tube_bore_um'])} · {label}",
+            models.append({"id": model_id, "name": label,
+                           "label": f"D {format_length(geometry['tube_bore_um'])} · {label}",
                            "ready": mesh_ready(directory), "review": metadata.get("review_pending", False),
                            "draft": metadata.get("network_status") == "draft",
+                           "canSaveParameters": metadata.get("solver_profile") == "jia_initial_state",
+                           "running": "running" in case_runs.values(),
                            "deletable": not delete_block, "deleteBlock": delete_block,
                            "runCount": len(case_runs), "formalRunCount": formal_runs,
                            "validation": not metadata.get("cloned_from") and (
@@ -119,12 +198,14 @@ def catalog():
                 prefix = "运行快照 · "
             elif state == "failed":
                 prefix = "运行失败 · "
+            elif state == "stopped":
+                prefix = "已停止 · "
             elif not complete:
                 prefix = "未完成 · "
             else:
                 prefix = {"field-check": "静电 · ", "pilot": "短验证 · ", "smoke": "短验证 · "}.get(kind, "")
             runs.append({"id": relative(run), "case": model_id, "validation": bool(kind) or not valid
-                         or state not in ("running", "complete", "snapshot"),
+                         or state not in ("running", "complete", "stopped", "snapshot"),
                          "deletable": state != "running" and (not valid or (complete and bool(kind))),
                          "label": f"{prefix}{label} · {run.name}"})
     pointer = ROOT/"latest-result.txt"
@@ -146,8 +227,10 @@ def self_check(key):
 def describe(key):
     directory = directory_for(key)
     geometry = read_geometry(directory/"geometry.json") if directory != NITROGEN else None
-    values = parameter_values(directory/"parameter.ini")
-    inputs = dict(entries((directory/"parameter.ini").read_text(encoding="utf-8-sig")))
+    parameter_data = (directory/"parameter.ini").read_bytes()
+    parameter_text = parameter_data.decode("utf-8-sig")
+    values = parameter_values(parameter_text)
+    inputs = dict(entries(parameter_text))
     summary_file = directory/"pulse-summary.json"
     summary = json.loads(summary_file.read_text(encoding="utf-8")) if summary_file.is_file() else {}
     case = directory.parent.parent if directory.parent.name == "runs" else directory
@@ -176,6 +259,7 @@ def describe(key):
         "parameters": [{"id": k, "label": title, "value": round(values[k]*scale, 12)}
                        for k, (title, scale) in PARAMETERS.items() if k in values],
         "initialFields": jia_initial_fields(inputs),
+        "parameterRevision": hashlib.sha256(parameter_data).hexdigest(),
         "geometryFields": [{"id": key, "label": title + " (μm)"} for key, title in TUBE_FIELDS] +
                           [{"id": "tip_radius_um", "label": "针尖半径 (μm)"}],
         "meshFields": [{"id": key, "label": title, "integer": dtype is int}
@@ -314,6 +398,122 @@ def configure_jia_initial(text, requested, metadata):
     return replace_parameters(text, changes)
 
 
+def configure_pulse(text, parameters):
+    active = dict(entries(text))
+    values = {key: float(parameters[key])/scale for key, (_, scale) in PARAMETERS.items() if key in active}
+    if any(not math.isfinite(value) or value < 0 or (value == 0 and key != "PulseFlat")
+           for key, value in values.items()):
+        raise ValueError("参数须为有限正数，平顶时长可为零。")
+    values["tend"] = sum(values[key] for key in ("PulseRise", "PulseFlat", "PulseFall"))
+    if not math.isfinite(values["tend"]):
+        raise ValueError("脉冲总时长须为有限数值。")
+    replacements = {key: f"{value:.13g}" for key, value in values.items()}
+    replacements["DielectricZoneEpsR"] = f"(/ {replacements['DielectricZoneEpsR']} /)"
+    return replace_parameters(text, replacements)
+
+
+def same_geometry(original, proposed):
+    same_domain = all(proposed[k] == original[k] for k in ("tube_bore_um", "tube_outer_um", "tip_gap_um",
+                                                          "domain_length_um"))
+    same_needle = all(proposed.get(k) == original.get(k) for k in ("tip_radius_um", "needle_shape",
+                                                                  "shaft_diameter_um", "cone_half_angle_deg"))
+    return same_domain, same_domain and same_needle and proposed["mesh_settings"] == original["mesh_settings"]
+
+
+def lock_case_parameters(case):
+    lock = case/".parameters.lock"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        raise ValueError("此算例正在保存参数或准备运行，请稍后重试。") from None
+    return lock
+
+
+def write_case_files(case, files):
+    with TemporaryDirectory(dir=case) as temporary:
+        stage = Path(temporary)
+        previous = {}
+        for name, data in files.items():
+            (stage/name).write_bytes(data)
+            target = case/name
+            if target.is_file():
+                previous[name] = stage/(name + ".previous")
+                shutil.copy2(target, previous[name])
+        replaced = []
+        try:
+            for name in files:
+                (stage/name).replace(case/name)
+                replaced.append(name)
+        except OSError:
+            for name in reversed(replaced):
+                if name in previous:
+                    previous[name].replace(case/name)
+                else:
+                    (case/name).unlink()
+            raise
+
+
+def rename_case(key, name):
+    case = directory_for(key)
+    if (case.parent != ROOT/"cases" or key != relative(case) or not (case/"geometry.json").is_file()
+            or read_geometry(case/"geometry.json").get("mesh_method") != "axisymmetric"):
+        raise ValueError("请选择一个二维氦气算例。")
+    if not isinstance(name, str):
+        raise ValueError("请输入算例名称。")
+    name = name.strip()
+    if not name or len(name) > 100 or not name.isprintable():
+        raise ValueError("算例名称须为 1 至 100 个可显示字符，且只能占一行。")
+    lock = lock_case_parameters(case)
+    try:
+        metadata = case_info(case)
+        if name != metadata.get("display_name", case.name):
+            metadata["display_name"] = name
+            write_case_files(case, {
+                "case-info.json": (json.dumps(metadata, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+                "MODEL_SETTINGS.md": settings_text(case, metadata=metadata).encode("utf-8"),
+            })
+    finally:
+        lock.rmdir()
+    return name
+
+
+def save_parameters(key, draft, parameters, revision, initial=None):
+    case = directory_for(key)
+    if case.parent != ROOT/"cases" or case_info(case).get("solver_profile") != "jia_initial_state":
+        raise ValueError("请选择 Jia 初始状态算例。")
+    lock = lock_case_parameters(case)
+    try:
+        if any(run_status(run) == "running" for run in (case/"runs").glob("*") if run.is_dir()):
+            raise ValueError("此算例正在运行，请等运行结束后保存参数。")
+        original = read_geometry(case/"geometry.json")
+        proposed = draft_geometry(draft["geometry"], draft["mesh"])
+        if not same_geometry(original, proposed)[1]:
+            raise ValueError("几何或网格已修改，请另存为独立算例并生成网格。")
+        meta = case_info(case)
+        parameter_file = case/"parameter.ini"
+        current = parameter_file.read_bytes()
+        if hashlib.sha256(current).hexdigest() != revision:
+            raise ValueError("磁盘上的参数已更新，请重新打开算例后再保存。")
+        text = configure_pulse(current.decode("utf-8-sig").replace("\r\n", "\n"), parameters)
+        text = configure_jia_initial(text, initial, meta)
+        manifest = case/"input-sha256.json"
+        hashes = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else fingerprints(case)
+        parameter_data = text.encode("utf-8")
+        hashes[parameter_file.name] = hashlib.sha256(parameter_data).hexdigest()
+        if parameter_data != current:
+            meta["parameters_edited_since_validation"] = True
+        files = {
+            parameter_file.name: parameter_data,
+            "case-info.json": (json.dumps(meta, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+            "MODEL_SETTINGS.md": settings_text(case, text, meta).encode("utf-8"),
+            manifest.name: (json.dumps(hashes, indent=2) + "\n").encode("utf-8"),
+        }
+        write_case_files(case, files)
+    finally:
+        lock.rmdir()
+    return relative(case)
+
+
 def clone(key, draft, parameters, initial=None):
     source = directory_for(key)
     if source.parent != ROOT/"cases":
@@ -322,23 +522,9 @@ def clone(key, draft, parameters, initial=None):
     if original.get("mesh_method") != "axisymmetric":
         raise ValueError("请选择一个二维轴对称算例。")
     proposed = draft_geometry(draft["geometry"], draft["mesh"])
-    same_domain = all(proposed[k] == original[k] for k in ("tube_bore_um", "tube_outer_um", "tip_gap_um",
-                                                          "domain_length_um"))
-    same_needle = all(proposed.get(k) == original.get(k) for k in ("tip_radius_um", "needle_shape",
-                                                                  "shaft_diameter_um", "cone_half_angle_deg"))
-    same_dimensions = same_domain and same_needle
-    same_mesh = same_dimensions and proposed["mesh_settings"] == original["mesh_settings"]
+    same_domain, same_mesh = same_geometry(original, proposed)
     geometry = original if same_mesh else proposed
-    text = (source/"parameter.ini").read_text(encoding="ascii")
-    active = parameter_values(source/"parameter.ini")
-    values = {key: float(parameters[key])/PARAMETERS[key][1] for key in active}
-    if any(not math.isfinite(value) or value < 0 or (value == 0 and key != "PulseFlat")
-           for key, value in values.items()):
-        raise ValueError("参数须为有限正数，平顶时长可为零。")
-    values["tend"] = sum(values[key] for key in ("PulseRise", "PulseFlat", "PulseFall"))
-    replacements = {key: f"{value:.13g}" for key, value in values.items()}
-    replacements["DielectricZoneEpsR"] = f"(/ {replacements['DielectricZoneEpsR']} /)"
-    text = replace_parameters(text, replacements)
+    text = configure_pulse((source/"parameter.ini").read_text(encoding="ascii"), parameters)
     metadata = case_info(source)
     if not same_domain:
         text = particle_search_parameters(resize_seed(text, original, geometry, metadata), geometry)
@@ -387,7 +573,8 @@ def paraview(key, field, geometry=False):
 
 if __name__ == "__main__":
     methods = {"catalog": catalog, "describe": describe, "render": render, "clone": clone,
-               "paraview": paraview, "selfCheck": self_check}
+               "saveParameters": save_parameters, "renameCase": rename_case,
+               "paraview": paraview, "selfCheck": self_check, "runProgress": run_progress}
     for line in sys.stdin:
         request = json.loads(line)
         response = {"id": request["id"]}

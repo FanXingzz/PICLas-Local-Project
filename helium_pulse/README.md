@@ -18,6 +18,7 @@
 
 - 用启动器打开项目后，按 `Ctrl+Shift+B` 编译。VS Code 调用 [build_solver.sh](build_solver.sh) 在 WSL 中编译 PICLas。
 - 在工作台选中算例后，可检查二维几何、调整网格并另存为独立算例。运行最多使用六个 MPI 进程。
+- Jia 初始状态算例可直接保存脉冲、初始粒子和界面参数。点「重命名算例」可修改显示名称，算例目录与运行快照保留原样。
 - 在工作台选中氦气模型或该模型的一帧结果后，点「删除算例」可将模型及其运行目录移到项目的 `.workbench-trash`。验证结果可用「删除验证」移走。正在运行的算例和标记为关键的算例受保护。已有正式结果会在确认框中列明。
 - 算例的 `MODEL_SETTINGS.md` 记录当前设置。每次运行的 `runs/<运行编号>/MODEL_SETTINGS.md`、`parameter.ini` 和 `DSMC.ini` 保存当次设置。反应清单、边界、初始粒子和随机种子可以由这些快照追溯。
-- 查看运行进度读 `solver.log`。电子密度与场量来自 `*_State_*.h5`；`*.vtu` 用于 ParaView。正式结果分析生成 `pulse-summary.txt`、`pulse-diagnostics.csv` 和电子密度演化图。
+- 工作台显示运行时间进度和预计剩余时间，详细进度见 `solver.log`。电子密度与场量来自 `*_State_*.h5`，`*.vtu` 用于 ParaView。正式结果分析生成 `pulse-summary.txt`、`pulse-diagnostics.csv` 和电子密度演化图。

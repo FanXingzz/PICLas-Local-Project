@@ -22,9 +22,9 @@ PARAMETERS = {
 }
 
 
-def parameter_values(path):
+def parameter_values(text):
     return {k.strip(): float(v.strip().removeprefix("(/").removesuffix("/)"))
-            for k, v in re.findall(r"^([^!\r\n=]+?)\s*=\s*([^!\r\n]+)", path.read_text(), re.M)
+            for k, v in re.findall(r"^([^!\r\n=]+?)\s*=\s*([^!\r\n]+)", text, re.M)
             if k.strip() in PARAMETERS}
 
 

@@ -69,6 +69,14 @@ def describe_case(directory, geometry_ready):
          ("与保存的 SHA-256 一致" if expected else "已计算当前 SHA-256")},
     ]
     blocked = bool(info.get("review_pending") or info.get("network_status") == "draft" or changed)
+    if info.get("solver_profile") == "jia_initial_state":
+        checks.append({"label": "求解器", "value": "Jia 初始状态独立求解器"})
+        validation = json_file(directory/"review-checks.json")
+        if validation.get("status") == "passed":
+            value = "6 ps 初态、三界面发射与石英充电验证通过"
+            if info.get("parameters_edited_since_validation"):
+                value = "原参数通过 6 ps 验证。当前参数已修改。"
+            checks.append({"label": "初始状态验证", "value": value})
     if plan:
         validate_plan(plan)
         checks.append({"label": "拟用网络", "value": f"{len(plan['species'])} 个物种，{len(plan['reactions'])} 条体反应，氦原子数和电荷检查通过"})

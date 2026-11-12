@@ -24,7 +24,11 @@ let renderVersion = 0;
 let queuedFrame;
 let drawing = false;
 let taskRunning = false;
+let savingModel = false;
+let renamingCase = false;
+let editRevision = 0;
 let checks;
+let progressRun;
 
 function status(text, error = false) {
     element('status').textContent = text;
@@ -37,6 +41,39 @@ function request(method, args = {}) {
         requests.set(id, { resolve, reject });
         vscode.postMessage({ id, method, args });
     });
+}
+
+function durationText(seconds) {
+    if (seconds === null) return '—';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor(seconds / 60) % 60;
+    return hours ? `${hours} 小时 ${minutes} 分` : `${minutes} 分 ${seconds % 60} 秒`;
+}
+
+async function pollProgress() {
+    const section = element('run-progress');
+    try {
+        const progress = await request('runProgress', { key: progressRun });
+        section.hidden = !progress;
+        if (!progress) return;
+        progressRun = progress.id;
+        const labels = { running: '求解中', saving: '正在保存结果', complete: '已完成',
+            stopped: '已停止', failed: '运行失败' };
+        const formatNs = value => Number(value.toPrecision(6));
+        element('run-progress-case').textContent = progress.label;
+        element('run-progress-state').textContent = labels[progress.state];
+        element('run-progress-time').textContent = progress.endNs === null ? `${formatNs(progress.currentNs)} ns`
+            : `${formatNs(progress.currentNs)} / ${formatNs(progress.endNs)} ns`;
+        const bar = element('run-progress-bar');
+        if (progress.percent === null) bar.removeAttribute('value');
+        else bar.value = progress.percent;
+        element('run-progress-percent').textContent = progress.percent === null ? '—' : `${progress.percent.toFixed(2)}%`;
+        element('run-progress-eta').textContent = `预计剩余 ${durationText(progress.etaSeconds)}`;
+    } catch {
+        if (!section.hidden) element('run-progress-state').textContent = '等待读取进度';
+    } finally {
+        window.setTimeout(pollProgress, 3000);
+    }
 }
 
 function safe(action) {
@@ -133,11 +170,16 @@ function updateActions() {
     const currentCase = caseSelected();
     element('geometry-section').hidden = !model;
     element('save-section').hidden = !model;
+    element('save-parameters').hidden = !model?.canSaveParameters;
+    element('save-parameters').disabled = savingModel || !dirty || !model?.canSaveParameters || model.running;
+    element('clone').disabled = savingModel;
     element('pulse-section').hidden = !detail?.parameters.length;
     element('initial-section').hidden = !detail?.initialFields?.length;
     element('select-model').hidden = !selection?.case || !catalog.models.some(m => m.id === selection.case);
     element('pv-result').disabled = !detail?.vtuAvailable || !field.value;
     element('pv-model').disabled = !detail?.modelAvailable;
+    element('rename-case').hidden = !currentCase;
+    element('rename-case').disabled = !currentCase || renamingCase;
     element('delete-result').hidden = Boolean(model);
     element('delete-result').disabled = Boolean(model) || !selection?.deletable;
     element('delete-case').hidden = !currentCase;
@@ -152,7 +194,7 @@ function updateActions() {
     document.querySelector('[data-task="mesh"]').disabled = taskRunning || dirty || !model || model.ready;
     for (const name of ['pilot', 'run']) {
         document.querySelector(`[data-task="${name}"]`).disabled =
-            taskRunning || dirty || !model?.ready || model.draft || (name === 'run' && model.review);
+            taskRunning || savingModel || dirty || !model?.ready || model.draft || (name === 'run' && model.review);
     }
     document.querySelector('[data-task="export"]').disabled =
         taskRunning || !selection?.case || !detail?.frames.length;
@@ -160,18 +202,23 @@ function updateActions() {
 
 function markDirty() {
     dirty = true;
-    status('参数草稿已修改，可预览或另存为独立算例。');
+    editRevision++;
+    status(modelSelected()?.canSaveParameters ? '参数草稿已修改。可保存参数或另存为独立算例。'
+        : '参数草稿已修改，可预览或另存为独立算例。');
     updateActions();
 }
 
-async function loadCatalog(preferred) {
+async function loadCatalog(preferred, { keepView = false } = {}) {
     catalog = await request('catalog');
     taskRunning = catalog.taskRunning;
+    const keptSelection = !preferred && (dirty || keepView)
+        ? [...catalog.models, ...catalog.runs].find(item => item.id === selection?.id) : null;
     const showValidation = element('show-validation').checked;
     const datasets = [
         ['正式结果', catalog.runs.filter(run => !run.validation)],
         ['待审核模型', catalog.models.filter(model => model.review)],
-        ['氦气算例', catalog.models.filter(model => !model.review && (!model.validation || showValidation))]
+        ['氦气算例', catalog.models.filter(model => !model.review &&
+            (!model.validation || showValidation || model.id === keptSelection?.id))]
     ];
     if (showValidation) datasets.push(['静电及短验证', catalog.runs.filter(run => run.validation)]);
     dataset.replaceChildren(...datasets.map(([title, items]) => {
@@ -180,6 +227,12 @@ async function loadCatalog(preferred) {
         group.append(...items.map(item => new Option(item.label, item.id)));
         return group;
     }));
+    if (keptSelection) {
+        dataset.value = keptSelection.id;
+        selection = keptSelection;
+        updateActions();
+        return;
+    }
     options(element('diameter'), [['', '自定义'], ...Object.entries(catalog.diameters).map(([l, v]) => [v, l])]);
     options(element('preset'), [['', '自定义'], ...Object.keys(catalog.meshPresets).map(name => [name, name])]);
     const next = preferred || selection?.id || vscode.getState()?.selection || catalog.latest;
@@ -361,6 +414,22 @@ element('play').onclick = () => {
 
 element('refresh').onclick = safe(() => loadCatalog());
 element('show-validation').onchange = safe(() => loadCatalog());
+element('rename-case').onclick = safe(async () => {
+    const model = caseSelected();
+    if (!model || renamingCase) return;
+    renamingCase = true;
+    updateActions();
+    try {
+        const name = await request('renameCase', { key: model.id });
+        if (name) {
+            await loadCatalog(undefined, { keepView: true });
+            status(`算例已重命名为「${name}」。`);
+        }
+    } finally {
+        renamingCase = false;
+        updateActions();
+    }
+});
 element('delete-result').onclick = safe(async () => {
     const moved = await request('delete', { key: selection.id });
     if (moved) {
@@ -421,16 +490,42 @@ element('preset').onchange = event => {
         markDirty();
     }
 };
+element('save-parameters').onclick = safe(async () => {
+    const key = selection.id;
+    const revision = editRevision;
+    savingModel = true;
+    updateActions();
+    try {
+        await request('saveParameters', { key, draft: draft(), revision: detail.parameterRevision,
+            parameters: fields('pulse'), initial: fields('initial') });
+        if (selection?.id !== key) return;
+        if (revision === editRevision) {
+            dirty = false;
+            await loadCatalog(key);
+        } else {
+            const saved = await request('describe', { key });
+            if (selection?.id !== key) return;
+            detail.parameterRevision = saved.parameterRevision;
+        }
+        if (selection?.id === key) {
+            status(dirty ? '已保存提交时的参数。后续修改仍为草稿。' : '参数已保存，可运行完整脉冲。');
+        }
+    } finally {
+        savingModel = false;
+        updateActions();
+    }
+});
 element('clone').onclick = safe(async () => {
-    const button = element('clone');
-    button.disabled = true;
+    savingModel = true;
+    updateActions();
     try {
         const key = await request('clone', { key: selection.id, draft: draft(),
             parameters: fields('pulse'), initial: fields('initial') });
         await loadCatalog(key);
         status('已创建独立算例。');
     } finally {
-        button.disabled = false;
+        savingModel = false;
+        updateActions();
     }
 });
 for (const button of document.querySelectorAll('[data-file]')) {
@@ -442,7 +537,7 @@ for (const button of document.querySelectorAll('[data-task]')) {
         updateActions();
         try {
             await request('task', { key: selection.id, name: button.dataset.task, ranks: Number(element('ranks').value) });
-            status('任务已启动，进度见 VS Code 终端。');
+            status('任务已启动。');
         } catch (error) {
             taskRunning = false;
             updateActions();
@@ -458,14 +553,16 @@ window.addEventListener('message', safe(async event => {
     if (reply.event === 'taskDone') {
         taskRunning = false;
         await loadCatalog();
-        if (reply.code === 0 && reply.case) {
+        if (!dirty && reply.code === 0 && reply.case) {
             const run = catalog.runs.find(item => item.case === reply.case && !item.label.startsWith('无效 · '));
             if (run) {
                 if (run.validation) element('show-validation').checked = true;
                 await loadCatalog(run.id);
             }
         }
-        status(reply.code === 0 ? '任务已完成。' : '任务已退出，请查看 VS Code 终端。', reply.code !== 0);
+        const result = reply.code === 0 ? '任务已完成。' : '任务已退出，请查看 VS Code 终端。';
+        status(dirty ? result + (modelSelected()?.canSaveParameters ? ' 参数草稿已保留，可点击「保存参数」。'
+            : ' 参数草稿已保留，可另存为独立算例。') : result, reply.code !== 0);
         return;
     }
     const pending = requests.get(reply.id);
@@ -477,3 +574,4 @@ window.addEventListener('message', safe(async event => {
 
 plot.addEventListener('load', () => vscode.postMessage({ event: 'firstPlotLoaded' }), { once: true });
 safe(loadCatalog)();
+pollProgress();

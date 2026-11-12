@@ -2,3 +2,9 @@
 *.patch text eol=lf
 *.cmd text eol=crlf
 *.vsix binary
+
+# Keep the Jia input hashes and mesh snapshot consistent across checkouts.
+helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/*.ini text eol=lf
+helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/geometry.json text eol=lf
+helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/mesh-geometry.json text eol=lf
+helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/CHEMISTRY_PLAN.json text eol=lf

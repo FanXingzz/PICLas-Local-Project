@@ -20,8 +20,9 @@ def real(value):
     return float(value.lower().replace("d", "e"))
 
 
-def record(directory):
-    parameter = (directory / "parameter.ini").read_text(encoding="utf-8-sig")
+def settings_text(directory, parameter=None, metadata=None):
+    if parameter is None:
+        parameter = (directory / "parameter.ini").read_text(encoding="utf-8-sig")
     dsmc = (directory / "DSMC.ini").read_text(encoding="utf-8-sig")
     parameters = entries(parameter)
     settings = dict(parameters + entries(dsmc))
@@ -31,7 +32,8 @@ def record(directory):
     geometry_file = directory / "geometry.json"
     metadata_file = directory / "case-info.json"
     geometry = json.loads(geometry_file.read_text(encoding="utf-8")) if geometry_file.is_file() else {}
-    metadata = json.loads(metadata_file.read_text(encoding="utf-8")) if metadata_file.is_file() else {}
+    if metadata is None:
+        metadata = json.loads(metadata_file.read_text(encoding="utf-8")) if metadata_file.is_file() else {}
     metal_he2_yield = settings.get("Particles-He2-MetalYield")
     run_info = directory / "run-info.txt"
     species = {i: settings.get(f"Part-Species{i}-SpeciesName", f"物种 {i}")
@@ -40,6 +42,7 @@ def record(directory):
                "N2Ion1": "N₂⁺", "N2": "N₂", "electron": "e⁻"}
     species = {i: display.get(name, name) for i, name in species.items()}
     title = metadata.get("display_name", directory.name if geometry else settings.get("ProjectName", directory.name))
+    title = re.sub(r"([\\`*_{}\[\]()&<>])", r"\\\1", title)
     lines = ["# 模型设置", "", f"**{title}**", "", f"目录 `{directory.name}`。"]
     if run_info.is_file():
         run = dict(entries(run_info.read_text(encoding="utf-8")))
@@ -200,7 +203,8 @@ def record(directory):
         lines.append("- 随机种子 " + "、".join(random) + "。")
 
     lines.extend(["", "## 原始输入和复现记录", ""])
-    for name in ("parameter.ini", "DSMC.ini", "REACTIONS.md", "review-checks.json", "CHEMISTRY_PLAN.json", "R15_SOURCE_REVIEW.md",
+    for name in ("parameter.ini", "DSMC.ini", "REACTIONS.md", "INITIAL_STATE_VALIDATION.md", "review-checks.json",
+                 "CHEMISTRY_PLAN.json", "R15_SOURCE_REVIEW.md",
                  "geometry.json", "mesh.ini", "hopr.ini", "case-info.json",
                  "input-sha256.txt", "input-sha256.json",
                  "literature-review.txt", "run-info.txt", "solver-sha256.txt", "solver-source.patch", "SOLVER_SETUP.md"):
@@ -208,9 +212,13 @@ def record(directory):
             lines.append(f"- [{name}]({name})")
     if log:
         lines.append(f"- [{log.name}]({log.name})")
+    return "\n".join(lines) + "\n"
+
+
+def record(directory):
     path = directory / "MODEL_SETTINGS.md"
     temporary = path.with_suffix(".md.tmp")
-    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    temporary.write_text(settings_text(directory), encoding="utf-8")
     temporary.replace(path)
     return path
 

@@ -124,7 +124,7 @@ function activate(context) {
             panel.webview.options = { enableScripts: true, localResourceRoots: [
                 vscode.Uri.joinPath(context.extensionUri, 'media')
             ] };
-            const methods = new Set(['catalog', 'describe', 'render', 'clone', 'paraview', 'selfCheck']);
+            const methods = new Set(['catalog', 'describe', 'render', 'clone', 'paraview', 'selfCheck', 'runProgress']);
             let disposed = false;
             const tell = message => { if (!disposed) panel.webview.postMessage(message); };
             const taskDone = vscode.tasks.onDidEndTaskProcess(event => {
@@ -141,6 +141,22 @@ function activate(context) {
                     let result;
                     if (method === 'catalog') {
                         result = { ...(await bridge.call(method)), taskRunning: activeTask !== null };
+                    } else if (method === 'saveParameters') {
+                        if (activeTask?.caseId === args.key) throw new Error('此算例有任务正在运行。');
+                        result = await bridge.call(method, args);
+                    } else if (method === 'renameCase') {
+                        const model = (await bridge.call('catalog')).models.find(item => item.id === args.key);
+                        if (!model) throw new Error('请选择一个二维氦气算例。');
+                        const name = await vscode.window.showInputBox({
+                            title: '重命名算例',
+                            prompt: '输入在工作台中显示的名称',
+                            value: model.name,
+                            validateInput: value => {
+                                const length = Array.from(value.trim()).length;
+                                return length && length <= 100 ? undefined : '请输入 1 至 100 个字符。';
+                            }
+                        });
+                        if (name !== undefined) result = await bridge.call(method, { key: model.id, name });
                     } else if (methods.has(method)) {
                         result = await bridge.call(method, args);
                     } else if (method === 'delete' || method === 'deleteCase') {

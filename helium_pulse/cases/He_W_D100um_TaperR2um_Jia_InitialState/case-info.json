@@ -37,9 +37,9 @@
   "reference_run": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020\\runs\\20261111-114633-research-l6wfPv",
   "mesh_reference": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D100um_R2um_Gap1mm_Pos1500V_Seed1e16_QuartzAbsorb\\runs\\20261111-125011-research-QZ3sBc",
   "geometry_reference": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D100um_R2um_Gap1mm_QuartzAbsorb_TipFine",
-  "review_pending": true,
+  "review_pending": false,
   "cloned_from": "cases/He_W_D100um_TaperR2um_Jia2023",
-  "network_status": "draft",
+  "network_status": "ready",
   "seed_macroparticles": {
     "e": 2048,
     "He+": 1024,
@@ -54,5 +54,6 @@
   "quartz_ion_induced_yield": {
     "He+": 0.02,
     "He2+": 0.02
-  }
+  },
+  "solver_profile": "jia_initial_state"
 }

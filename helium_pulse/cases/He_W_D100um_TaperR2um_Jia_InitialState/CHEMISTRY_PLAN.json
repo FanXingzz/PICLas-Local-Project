@@ -1,6 +1,6 @@
 {
   "source": "https://doi.org/10.1088/1361-6463/ac9eca",
-  "hold_reason": "初始条件和界面参数已建立。石英离子发射需要此目录的独立求解器补丁，尚未编译或运行。",
+  "hold_reason": "",
   "species": {
     "He": {
       "label": "He",

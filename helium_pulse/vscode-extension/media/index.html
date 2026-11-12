@@ -15,6 +15,19 @@
     </header>
     <div id="workspace">
         <main>
+            <section id="run-progress" class="run-progress" aria-labelledby="run-progress-title" hidden>
+                <div class="run-progress-heading">
+                    <h2 id="run-progress-title">求解进度</h2>
+                    <span id="run-progress-state"></span>
+                </div>
+                <div id="run-progress-case" class="run-progress-case"></div>
+                <progress id="run-progress-bar" max="100" aria-label="求解完成百分比"></progress>
+                <div class="run-progress-values">
+                    <span id="run-progress-time"></span>
+                    <strong id="run-progress-percent"></strong>
+                    <span id="run-progress-eta"></span>
+                </div>
+            </section>
             <div class="toolbar">
                 <label class="dataset">显示内容<select id="dataset" aria-label="显示内容"></select></label>
                 <label>场量<select id="field">
@@ -24,6 +37,7 @@
                     <option value="">几何与材料</option>
                 </select></label>
                 <label class="check"><input type="checkbox" id="show-validation">显示验证</label>
+                <button id="rename-case" type="button" hidden disabled>重命名算例</button>
                 <button id="delete-result" type="button" disabled>删除验证</button>
                 <button id="delete-case" type="button" hidden disabled>删除算例</button>
             </div>
@@ -120,7 +134,10 @@
                 </div>
             </details>
             <section id="save-section">
-                <button id="clone" type="button" class="primary">另存为独立算例</button>
+                <div class="actions">
+                    <button id="save-parameters" type="button" class="primary" hidden disabled>保存参数</button>
+                    <button id="clone" type="button">另存为独立算例</button>
+                </div>
             </section>
             <section>
                 <h2>编译与运行</h2>

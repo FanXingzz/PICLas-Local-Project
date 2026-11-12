@@ -4,7 +4,9 @@
 
 ## 在另一台 Windows 电脑上打开
 
-1. 登录有仓库权限的 GitHub 账号，在 [Release](https://github.com/FanXingzz/PICLas-Local-Project/releases/tag/migration-2026-11-12) 下载迁移 ZIP 及 SHA-256 校验文件。Git 源码下载包含脚本和配置，完整数据和预编译求解工具随 Release 附件提供。
+工作台 **1.5.7** 随当前仓库源码提供，包含参数保存、算例重命名和运行进度。已有 Git 检出可用 `git pull` 更新，再双击 [Open-PICLas.cmd](Open-PICLas.cmd) 安装仓库中的新版扩展。
+
+1. 在 [迁移 Release](https://github.com/FanXingzz/PICLas-Local-Project/releases/tag/migration-2026-11-12) 下载迁移 ZIP 及 SHA-256 校验文件。该归档保留发布时的工作台版本、历史数据和通用预编译求解器。使用新版时，在新目录下载当前源码，将所需数据和 `runtime/` 复制到对应的相对路径。
 2. 将 ZIP 完整解压到本地目录，例如 `D:\Simulation\PICLas-Local-Project`。可在 PowerShell 运行 `Get-FileHash .\PICLas-Local-Project-migration-2026-11-12.zip -Algorithm SHA256`，与校验文件中的值比较。
 3. 安装 [Visual Studio Code](https://code.visualstudio.com/download) 和 [Python](https://www.python.org/downloads/windows/) 3.11 或更新版本，建议使用 3.12。使用自定义 VS Code 安装位置时，可把环境变量 `PICLAS_CODE_CLI` 指向安装目录中的 `bin\code.cmd`。
 4. 双击 [Open-PICLas.cmd](Open-PICLas.cmd)。第一次打开会建立项目目录内的 `.venv`、联网安装 Python 绘图依赖，并安装包内的 PICLas 工作台扩展。VS Code 若询问是否信任此工作区，核对目录后选择信任。
@@ -22,7 +24,7 @@
 | 原始氮气负流注 | [模型设置](official_streamer/pic-mcc/MODEL_SETTINGS.md) · [原始结果目录](official_streamer/pic-mcc/) |
 | 网格和短验证 | [文档索引](helium_pulse/docs/README.md) · [验证目录](helium_pulse/verification/) |
 
-在「正式结果」选一项运行，用时间轴播放。电子密度色标可设为对数和固定范围。HDF5 的 `/PartData` 存有宏粒子的坐标、速度、物种和权重，`/ElemData` 存有单元量。想改初始密度和壁面系数时，在「待审核模型」选择 `jia初始状态`，展开「初始粒子与界面发射」，保存为独立算例。删除操作把选中的数据移到 `helium_pulse/.workbench-trash`。
+在「正式结果」选一项运行，用时间轴播放。电子密度色标可设为对数和固定范围。HDF5 的 `/PartData` 存有宏粒子的坐标、速度、物种和权重，`/ElemData` 存有单元量。在「氦气算例」选择 `jia初始状态`，可以编辑脉冲、初始粒子和界面发射，再点击「保存参数」。几何或网格修改可另存为独立算例。选中算例或它的运行结果后可点击「重命名算例」，算例目录和历史结果保持原样。运行时工作台显示已算时间及预计剩余时间。删除操作把选中的数据移到 `helium_pulse/.workbench-trash`。
 
 迁移时 100 μm 六物种正式计算尚在运行，本包以最近一帧已写完的 HDF5 为截点。对应逐步诊断保留到同一时刻，工作台标为「运行快照」。快照时刻和来源以 [SNAPSHOT.json](SNAPSHOT.json) 为准。已完成的历史结果随包保留。缓存、运行锁和已移入项目回收站的文件不纳入迁移包。
 
@@ -57,7 +59,7 @@ bash helium_pulse/build_solver.sh
 
 编译脚本在独立工作目录应用项目补丁。可以用 `PICLAS_SOLVER_ROOT` 指定该工作目录，用 `PICLAS_VTK_BIN` 指定自行编译的转换器。随包运行工具的上游源码和项目补丁可分别从 [PICLas 对应提交](https://github.com/piclas-framework/piclas/tree/514af4c6e5ec2a16f75db99295b34b08dfeced90) 和 `runtime/linux-x86_64/solver-source.patch` 取得。
 
-`jia初始状态` 已保存初值、独立石英发射补丁和编译脚本，处于待编译验证状态。该模型的求解入口仍需用其独立求解器验证后接入。见 [独立求解器说明](helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/SOLVER_SETUP.md)。
+`jia初始状态` 已完成初态、界面发射与石英充电的 6 ps 验证。运行此算例需要先在 WSL 中编译 Jia 独立求解器，再点击「完整脉冲」。可用 `PICLAS_JIA_INITIAL_SOLVER_ROOT` 指定独立构建目录。[编译与验证说明](helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/SOLVER_SETUP.md)
 
 ## 定位运行问题
 

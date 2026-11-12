@@ -36,6 +36,24 @@ aside {
 }
 aside > * { padding: 12px 0; margin: 0; border-bottom: 1px solid var(--border); }
 aside > :first-child { padding-top: 0; }
+.run-progress {
+    display: grid;
+    gap: 7px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+}
+.run-progress-heading, .run-progress-values {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 10px;
+}
+.run-progress-heading h2 { margin: 0; }
+.run-progress-case { color: var(--muted); overflow-wrap: anywhere; }
+.run-progress-values { font-variant-numeric: tabular-nums; }
+.run-progress progress { width: 100%; height: 8px; accent-color: var(--vscode-progressBar-background); }
 .toolbar, .timeline, .actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .toolbar > .dataset { flex: 1 1 230px; }
 .toolbar > label { min-width: 0; }

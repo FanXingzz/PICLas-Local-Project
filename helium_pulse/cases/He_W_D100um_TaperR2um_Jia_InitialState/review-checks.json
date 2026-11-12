@@ -1,0 +1,97 @@
+{
+  "status": "passed",
+  "simulation_ns": 0.006,
+  "mpi_ranks": 6,
+  "solver_profile": "jia_initial_state",
+  "baseline_run": "cases/He_W_D100um_TaperR2um_Jia_InitialState/runs/20261112-140920-pilot-e4wEvH",
+  "initial_particles": {
+    "He+": {
+      "macro_count": 1024,
+      "weighted_population": 76.82292024659475,
+      "number_density_m3": 10000000000000.002
+    },
+    "e": {
+      "macro_count": 2048,
+      "weighted_population": 153.6458404931895,
+      "number_density_m3": 20000000000000.004
+    },
+    "He2+": {
+      "macro_count": 1024,
+      "weighted_population": 76.82292024659475,
+      "number_density_m3": 10000000000000.002
+    },
+    "He*": {
+      "macro_count": 256,
+      "weighted_population": 1891.9422561327663,
+      "number_density_m3": 246273150000000.0
+    },
+    "He2*": {
+      "macro_count": 256,
+      "weighted_population": 1891.9422561327663,
+      "number_density_m3": 246273150000000.0
+    }
+  },
+  "initial_charge_C": 0.0,
+  "default_particle_balance_error": 1.4566126083082054e-13,
+  "default_quartz_charge_error_C": 1.2037062152420224e-33,
+  "directed_tests": {
+    "He+": {
+      "run": "verification/Jia_InitialState_SEE_HePlus/runs/20261112-140758-pilot-le598S",
+      "results": {
+        "HV": {
+          "impacts": 5859,
+          "emitted": 1450,
+          "gamma": 0.24748250554705106,
+          "target": 0.25,
+          "z": -0.4450201084928499
+        },
+        "Ground": {
+          "impacts": 5852,
+          "emitted": 1453,
+          "gamma": 0.24829118250172555,
+          "target": 0.25,
+          "z": -0.3018889418981859
+        },
+        "Quartz": {
+          "impacts": 5878,
+          "emitted": 139,
+          "gamma": 0.023647499149370033,
+          "target": 0.02,
+          "z": 1.9974777688028091
+        }
+      },
+      "particle_balance_error": 2.8322233447397593e-11,
+      "quartz_charge_flux_C": 7.142231065991387e-17,
+      "quartz_charge_error_max_C": 1.9228484564762163e-30
+    },
+    "He2+": {
+      "run": "verification/Jia_InitialState_SEE_He2Plus/runs/20261112-140825-pilot-XJqROe",
+      "results": {
+        "HV": {
+          "impacts": 5995,
+          "emitted": 601,
+          "gamma": 0.10025020850709891,
+          "target": 0.1,
+          "z": 0.06457663497846737
+        },
+        "Ground": {
+          "impacts": 5963,
+          "emitted": 592,
+          "gamma": 0.09927888646654867,
+          "target": 0.1,
+          "z": -0.1856157378929541
+        },
+        "Quartz": {
+          "impacts": 6000,
+          "emitted": 128,
+          "gamma": 0.021333333333332833,
+          "target": 0.02,
+          "z": 0.7377111135630496
+        }
+      },
+      "particle_balance_error": 2.0660806399064313e-11,
+      "quartz_charge_flux_C": 7.263632166237983e-17,
+      "quartz_charge_error_max_C": 2.144715586069626e-30
+    }
+  }
+}
