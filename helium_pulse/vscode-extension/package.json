@@ -1,0 +1,27 @@
+{
+  "name": "piclas-workbench",
+  "displayName": "PICLas 工作台",
+  "description": "在 VS Code 中查看 PICLas 模型、参数和放电时间序列。",
+  "publisher": "local-piclas",
+  "version": "1.5.4",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Visualization"],
+  "main": "./extension.js",
+  "extensionKind": ["ui"],
+  "activationEvents": ["onCustomEditor:piclas.workbench", "onCommand:piclas.openWorkbench"],
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false },
+    "virtualWorkspaces": { "supported": false }
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "piclas.workbench",
+        "displayName": "PICLas 工作台",
+        "selector": [{ "filenamePattern": "*.piclas-workbench" }],
+        "priority": "default"
+      }
+    ],
+    "commands": [{ "command": "piclas.openWorkbench", "title": "PICLas: 打开工作台" }]
+  }
+}

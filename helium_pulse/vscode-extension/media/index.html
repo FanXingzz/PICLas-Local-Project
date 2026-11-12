@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src __CSP__; style-src __CSP__; img-src data:">
+    <link rel="stylesheet" href="__CSS__">
+    <title>PICLas 工作台</title>
+</head>
+<body>
+    <header>
+        <h1>PICLas 工作台</h1>
+        <button id="refresh" type="button">刷新</button>
+    </header>
+    <div id="workspace">
+        <main>
+            <div class="toolbar">
+                <label class="dataset">显示内容<select id="dataset" aria-label="显示内容"></select></label>
+                <label>场量<select id="field">
+                    <option value="ElectronDensityCell">电子密度</option>
+                    <option value="Phi">电势</option>
+                    <option value="E">电场强度</option>
+                    <option value="">几何与材料</option>
+                </select></label>
+                <label class="check"><input type="checkbox" id="show-validation">显示验证</label>
+                <button id="delete-result" type="button" disabled>删除验证</button>
+                <button id="delete-case" type="button" hidden disabled>删除算例</button>
+            </div>
+            <div class="toolbar plot-controls">
+                <label>观察区域<select id="focus">
+                    <option value="full">全管</option>
+                    <option value="midgap">管中段</option>
+                    <option value="hv-tip">高压针尖</option>
+                    <option value="ground-tip">接地针尖</option>
+                </select></label>
+            </div>
+            <figure>
+                <img id="plot" alt="PICLas 几何或场量的二维剖面" hidden>
+                <figcaption id="plot-message" aria-live="polite">正在读取算例…</figcaption>
+            </figure>
+            <div class="timeline">
+                <button id="play" type="button" disabled>播放</button>
+                <input id="time" type="range" min="0" max="0" value="0" aria-label="仿真时间帧" disabled>
+                <output id="time-label" for="time"></output>
+            </div>
+            <div class="toolbar">
+                <label class="check"><input type="checkbox" id="mesh-overlay">显示网格</label>
+                <label class="check"><input type="checkbox" id="equal-scale">等比例</label>
+                <button type="button" id="pv-result">ParaView 结果</button>
+                <button type="button" id="pv-model">ParaView 三维模型</button>
+                <label class="check"><input type="checkbox" id="clean-plot">净图</label>
+                <button type="button" id="export-png">保存 PNG</button>
+            </div>
+        </main>
+        <aside>
+            <section>
+                <h2 id="color-heading">色标</h2>
+                <div class="actions">
+                    <label>比例<select id="color-scale">
+                        <option value="auto">默认</option>
+                        <option value="linear">线性</option>
+                        <option value="log">对数</option>
+                    </select></label>
+                    <label class="check"><input type="checkbox" id="manual-color">固定范围</label>
+                </div>
+                <div class="form">
+                    <label>下限<input id="color-low" type="number" step="any" disabled></label>
+                    <label>上限<input id="color-high" type="number" step="any" disabled></label>
+                </div>
+                <button id="apply-color" type="button" disabled>应用</button>
+            </section>
+            <section>
+                <h2>算例</h2>
+                <p id="assessment" hidden></p>
+                <div class="actions">
+                    <button type="button" data-file="MODEL_SETTINGS.md">模型设置</button>
+                    <button type="button" data-file="parameter.ini">求解参数</button>
+                    <button type="button" data-file="DSMC.ini">反应参数</button>
+                    <button type="button" data-file="REACTIONS.md" hidden>反应核对表</button>
+                    <button type="button" id="select-model" hidden>打开对应模型</button>
+                </div>
+            </section>
+            <details id="self-check">
+                <summary>模型自检</summary>
+                <div id="check-items" class="check-list" aria-live="polite"></div>
+                <label>筛选反应与界面<input id="reaction-filter" type="search" placeholder="例如 R15、He₂⁺、Quartz"></label>
+                <div id="check-reactions" class="check-list"></div>
+                <details id="check-hash-section">
+                    <summary>输入文件 SHA-256</summary>
+                    <div id="check-hashes" class="check-list checks-hashes"></div>
+                </details>
+            </details>
+            <details id="pulse-section" open>
+                <summary>脉冲与介质</summary>
+                <div id="pulse" class="form"></div>
+            </details>
+            <details id="initial-section" open hidden>
+                <summary>初始粒子与界面发射</summary>
+                <div id="initial" class="form"></div>
+            </details>
+            <details id="geometry-section">
+                <summary>二维几何与网格</summary>
+                <div class="actions">
+                    <label>管内径<select id="diameter"><option value="">自定义</option></select></label>
+                    <label>网格预设<select id="preset"><option value="">自定义</option></select></label>
+                </div>
+                <div id="geometry" class="form"></div>
+                <div class="form">
+                    <label>针头轮廓<select id="needle-shape">
+                        <option value="hemisphere">直杆圆头</option>
+                        <option value="tapered">锥形圆头</option>
+                    </select></label>
+                </div>
+                <div id="taper" class="form" hidden></div>
+                <div id="mesh" class="form"></div>
+                <div class="actions">
+                    <button id="preview" type="button">预览草稿</button>
+                    <button type="button" data-file="geometry.json">几何输入</button>
+                </div>
+            </details>
+            <section id="save-section">
+                <button id="clone" type="button" class="primary">另存为独立算例</button>
+            </section>
+            <section>
+                <h2>编译与运行</h2>
+                <label class="ranks">MPI 进程数<input id="ranks" type="number" value="6" min="1" max="6" step="1"></label>
+                <div class="actions">
+                    <button type="button" data-task="solver">编译求解器</button>
+                    <button type="button" data-task="mesh">生成网格</button>
+                    <button type="button" data-task="pilot">6 ps 短验证</button>
+                    <button type="button" data-task="run" class="primary">完整脉冲</button>
+                    <button type="button" data-task="export">导出 VTU</button>
+                </div>
+            </section>
+        </aside>
+    </div>
+    <footer id="status" role="status"></footer>
+    <script src="__JS__" defer></script>
+</body>
+</html>

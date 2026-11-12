@@ -1,0 +1,209 @@
+[
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-085545-smoke-9zrVst",
+    "model": "helium_pulse",
+    "mode": "smoke",
+    "end_seconds": 6E-12,
+    "files": 10,
+    "bytes": 18076733.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-085801-smoke-wbKs5a",
+    "model": "helium_pulse",
+    "mode": "smoke",
+    "end_seconds": 6E-12,
+    "files": 10,
+    "bytes": 18077515.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-085826-smoke-1rmYPX",
+    "model": "helium_pulse",
+    "mode": "smoke",
+    "end_seconds": 6E-12,
+    "files": 10,
+    "bytes": 18077833.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-085936-smoke-rMLs1R",
+    "model": "helium_pulse",
+    "mode": "smoke",
+    "end_seconds": 6E-12,
+    "files": 16,
+    "bytes": 91307678.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-090119-smoke-O8X6kh",
+    "model": "helium_pulse",
+    "mode": "smoke",
+    "end_seconds": 6E-12,
+    "files": 38,
+    "bytes": 788680702.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-090417-pilot-muD6p4",
+    "model": "helium_pulse",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 458460635.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-091314-pilot-rzqTcy",
+    "model": "helium_pulse",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 28,
+    "bytes": 458459535.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\runs\\20261111-092654-pilot-C5KpbI",
+    "model": "helium_pulse",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 28,
+    "bytes": 458459499.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R10um_Plates_Tetra\\runs\\20261111-100153-pilot-R1l9Im",
+    "model": "Archive3D_D50um_R10um_Plates_Tetra",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 29,
+    "bytes": 877462887.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R2um_Plates_Swept_Coarse\\runs\\20261111-101914-pilot-j6R8S8",
+    "model": "Archive3D_D50um_R2um_Plates_Swept_Coarse",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 253811933.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R2um_Plates_Tetra_Unfinished\\runs\\20261111-094906-pilot-ztkhZw",
+    "model": "Archive3D_D50um_R2um_Plates_Tetra_Unfinished",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 10,
+    "bytes": 80002932.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R2um_Plates_Tetra_Unfinished\\runs\\20261111-095402-pilot-WxKZ0T",
+    "model": "Archive3D_D50um_R2um_Plates_Tetra_Unfinished",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 15,
+    "bytes": 242909214.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R2um_Plates_Tetra_Unfinished\\runs\\20261111-095608-pilot-OX2Sih",
+    "model": "Archive3D_D50um_R2um_Plates_Tetra_Unfinished",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 15,
+    "bytes": 242909207.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\Archive3D_D50um_R2um_Tube_Swept_Coarse\\runs\\20261111-103557-pilot-rRk5aP",
+    "model": "Archive3D_D50um_R2um_Tube_Swept_Coarse",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 162040570.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_D50um_R2um_Gap1mm_Pos1500V_AnodeSeed_NoEmission\\runs\\20261111-105743-pilot-dRIdNO",
+    "model": "He_D50um_R2um_Gap1mm_Pos1500V_AnodeSeed_NoEmission",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 28,
+    "bytes": 11888789.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_D50um_R2um_Gap1mm_Pos1500V_AnodeSeed_NoEmission\\runs\\20261111-110054-pilot-UQXtyw",
+    "model": "He_D50um_R2um_Gap1mm_Pos1500V_AnodeSeed_NoEmission",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 29,
+    "bytes": 11891487.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020\\runs\\20261111-114001-pilot-WosrDS",
+    "model": "He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 28,
+    "bytes": 13275663.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\electron_absorb_p0\\runs\\20261111-114222-pilot-fqzys8",
+    "model": "electron_absorb_p0",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 11858787.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\electron_absorb_p0\\runs\\20261111-114426-pilot-au71l0",
+    "model": "electron_absorb_p0",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 12,
+    "bytes": 579839.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\electron_absorb_p0\\runs\\20261111-114532-pilot-jq3Mcg",
+    "model": "electron_absorb_p0",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 12,
+    "bytes": 581272.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\electron_absorb_p0\\runs\\20261111-114602-pilot-ZssY5h",
+    "model": "electron_absorb_p0",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 12,
+    "bytes": 588418.0,
+    "completed": false
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\electron_reflect_p1\\runs\\20261111-114229-pilot-QpmAHN",
+    "model": "electron_reflect_p1",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 12019615.0,
+    "completed": true
+  },
+  {
+    "path": "E:\\PICLas_Local_Project\\helium_pulse\\verification\\ion_emit_gamma1\\runs\\20261111-114248-pilot-CGXeSg",
+    "model": "ion_emit_gamma1",
+    "mode": "pilot",
+    "end_seconds": 6E-12,
+    "files": 30,
+    "bytes": 11890628.0,
+    "completed": true
+  }
+]

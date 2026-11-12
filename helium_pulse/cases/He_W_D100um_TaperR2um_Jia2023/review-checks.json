@@ -1,0 +1,49 @@
+{
+  "approved_baseline_short": {
+    "run": "helium_pulse\\cases\\He_W_D100um_TaperR2um_Jia2023\\runs\\20261112-093701-smoke-pRJCra",
+    "ranks": 6,
+    "simulation_ps": 6.0,
+    "mesh_cells": 11928,
+    "dt_ps": 0.025,
+    "HDF5_frames": 7,
+    "iterative_seconds": 93.93,
+    "MUMPS_seconds": 20.6,
+    "same_final_weighted_species_counts": true,
+    "weighted_He_plus_to_He2_plus_R16": 37.511191526658,
+    "max_pair_hazard": 1.667887771300395e-06
+  },
+  "isolated_channel_check": {
+    "run": "helium_pulse\\verification\\Jia_R2_R3_R15_ReactionCheck\\runs\\20261112-093847-pilot-F4f22q",
+    "ranks": 6,
+    "simulation_ps": 6.0,
+    "weighted_reaction_events": {
+      "R1": 632551.2227140723,
+      "R2": 7727.305454491543,
+      "R3": 34510.29620452569,
+      "R4": 0.0,
+      "R5": 0.0,
+      "R6": 0.0,
+      "R7": 0.0,
+      "R8": 0.0,
+      "R9": 0.0,
+      "R10": 0.0,
+      "R11": 0.0,
+      "R12": 75.022383053316,
+      "R13": 0.0,
+      "R14": 32109.579946819576,
+      "R15": 14629.36469539661,
+      "R16": 0.0,
+      "R17": 0.0,
+      "R18": 0.0,
+      "R19": 0.0,
+      "R20": 0.0,
+      "R21": 0.0,
+      "R22": 0.0,
+      "R23": 0.0
+    },
+    "net_HeMeta": 39911.90778436411,
+    "net_He2Meta": 14629.36469539662,
+    "max_pair_hazard": 0.21606372271939192,
+    "note": "Artificially energized electrons and increased molecular-ion weights; transport force disabled to exercise rare channels."
+  }
+}

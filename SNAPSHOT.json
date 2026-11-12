@@ -1,0 +1,7 @@
+{
+  "source_run": "helium_pulse/cases/He_W_D100um_TaperR2um_Jia2023/runs/20261112-094232-research-9ZQunK",
+  "status": "snapshot",
+  "last_saved_time_ns": 5.25,
+  "last_state": "helium_pulse_State_000.00000000525000.h5",
+  "captured_at": "2026-11-12T12:47:30+08:00"
+}

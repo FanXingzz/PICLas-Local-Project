@@ -1,0 +1,169 @@
+100 μm 钨针氦气六物种算例 · Slurm 上传和运行指令
+=================================================
+
+本机文件
+  E:\PICLas_Local_Project\He_D100um_Jia2023_6species_cloud.zip
+
+本说明中的「集群终端」指登录 workstation 后看到的 Linux 命令行。
+「Windows PowerShell」指你本机另开的窗口。复制命令时只复制命令行本身。
+算例使用单个 CPU 节点，6 个 MPI 进程，每个进程 1 线程。
+
+1. 在已打开的集群终端建立上传目录
+---------------------------------
+
+hostname
+mkdir -p ~/piclas_cloud
+cd ~/piclas_cloud
+pwd
+
+记下 pwd 显示的完整路径。先把 ZIP 放到这个目录。
+
+2. 从 Windows 上传 ZIP
+----------------------
+
+如果你用的是网页终端，在平台的「文件管理」里打开第 1 步的目录，
+选择「上传」，选中本机的 He_D100um_Jia2023_6species_cloud.zip。
+
+如果平台开通了 SSH 文件传输，可以另开 Windows PowerShell，执行下面这组命令。
+SSH 用户名、对外地址和端口以平台显示的连接信息为准。workstation 是登录节点
+主机名，只有它能从本机访问时才可直接填作 SSH 地址。
+
+$Zip = 'E:\PICLas_Local_Project\He_D100um_Jia2023_6species_cloud.zip'
+$ClusterUser = Read-Host '集群 SSH 用户名'
+$ClusterHost = Read-Host '集群 SSH 地址或 IP'
+$SshPort = Read-Host '集群 SSH 端口'
+scp -P $SshPort $Zip "${ClusterUser}@${ClusterHost}:piclas_cloud/"
+
+传完回到集群终端，执行：
+
+cd ~/piclas_cloud
+ls -lh He_D100um_Jia2023_6species_cloud.zip
+sha256sum He_D100um_Jia2023_6species_cloud.zip
+unzip He_D100um_Jia2023_6species_cloud.zip -d He_D100um_Jia2023
+cd He_D100um_Jia2023
+sha256sum -c SHA256SUMS
+
+包本身的 SHA-256 应为：
+2f91bce6f617f3119415575e5bab3c8d5dd098492930ba309545bc1efd09bee3
+
+解压后的 22 项校验应全部显示 OK。若以前已经解压过，请为这次解压使用新目录，
+并在后面的 cd 命令中使用新目录名。
+
+3. 确认 cpu 分区和扣费项目
+------------------------
+
+sinfo -p cpu
+read -r -p '输入你获授权的项目计费名称，个人账户直接回车：' project_account
+billing=()
+if [[ -n "$project_account" ]]; then billing=(--comment="$project_account"); fi
+
+这几行设置当前集群终端的提交参数。重新登录后，提交前重新执行。
+按你提供的集群规则，项目计费用 --comment。个人账户时省略此参数。
+
+4. 在计算节点编译 PICLas
+----------------------
+
+从登录节点申请一个 CPU 节点上的 6 个核。下面的 1 小时是编译时限示例，
+请按分区限制和实际编译耗时调整。
+
+salloc --partition=cpu --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task=6 --time=01:00:00 "${billing[@]}"
+
+出现分配成功的提示后，从分配会话进入计算节点：
+
+srun --nodes=1 --ntasks=1 --cpus-per-task=6 --pty bash -l
+hostname
+cd ~/piclas_cloud/He_D100um_Jia2023
+module avail
+
+若站点要求通过 SSH 进入已分配节点，用 squeue -j "$SLURM_JOB_ID" -h -o '%N'
+查看本次分配的节点名，再按平台说明从 workstation 用 SSH 登录这个节点，
+之后执行上面的 cd 和 module avail。
+
+按平台提供的名称加载同一套 GNU Fortran、MPI、并行 HDF5 和带 MUMPS 的 PETSc。
+编译还需要 Git、CMake、Ninja，运行需要 Python 3。编译和提交时要使用同一套
+库与 MPI 模块。若平台要求设置 PETSC_DIR 或 HDF5_ROOT，按包内 README_CLOUD.md
+和站点的模块说明填写。这里不预填未确认的模块名。
+
+加载模块后执行：
+
+command -v gfortran mpifort mpirun git cmake ninja python3
+module list
+bash -o pipefail -c 'bash build-cloud.sh 2>&1 | tee build.log'
+test -x build/bin/piclas && ls -lh build/bin/piclas
+ldd build/bin/piclas
+
+build-cloud.sh 会获取 PICLas v4.3.0，校验提交号并应用包内的六物种补丁。
+如果计算节点访问不了 GitHub，按 README_CLOUD.md 上传同版本源码仓库，
+通过 PICLAS_UPSTREAM 指向集群上的源码目录后再编译。
+ldd 如显示缺少 MPI、HDF5 或 PETSc 库，先补齐编译时对应的模块。
+
+编译完成后，在计算节点终端执行一次 exit，退出 srun shell。
+回到 salloc 分配会话后再执行一次 exit，释放编译资源。
+
+5. 从登录节点提交 6 ps 短算
+--------------------------
+
+回到 workstation 后进入算例目录，加载与编译时相同的运行模块。
+确认第 3 步的计费参数已设置。30 分钟是示例时限。
+
+cd ~/piclas_cloud/He_D100um_Jia2023
+sbatch --partition=cpu --ntasks-per-node=6 --time=00:30:00 "${billing[@]}" submit.slurm pilot
+squeue -u "$USER"
+
+记下 Submitted batch job 后面的数字。下面用实际作业号替换示例 12345：
+
+sacct -j 12345 --format=JobID,State,ExitCode,Elapsed,MaxRSS
+tail -n 40 slurm-12345.log
+grep '^RUN_DIRECTORY=' slurm-12345.log
+
+到 RUN_DIRECTORY 指向的目录，确认 run-status.txt 内容是 complete。
+这一步会检查 6 ps 的终点 HDF5 文件和六个进程的 JiaReactionCounts CSV。
+
+6. 提交完整 9 ns 正脉冲
+----------------------
+
+回到算例目录再提交。下面的 12 小时是申请上限示例，提交前查看 cpu 分区
+的时限和计费规则，按节点性能调整。正式作业默认仍使用 6 个 MPI 进程。
+
+cd ~/piclas_cloud/He_D100um_Jia2023
+sbatch --partition=cpu --ntasks-per-node=6 --time=12:00:00 "${billing[@]}" submit.slurm research
+squeue -u "$USER"
+
+正式算例为 +1500 V、上升 2 ns、平顶 5 ns、下降 2 ns。
+PD 表示排队，R 表示运行。离开 SSH 后，已提交的批处理作业会继续运行。
+若作业从 squeue 消失，用 sacct 看是否完成。仅在确实需要停止时，
+才执行 scancel 加作业号。
+
+7. 打包结果并下载到 Windows
+--------------------------
+
+在集群终端输入第 6 步得到的正式作业号：
+
+cd ~/piclas_cloud/He_D100um_Jia2023
+read -r -p '正式作业号：' job_id
+sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,MaxRSS
+run_dir=$(sed -n 's/^RUN_DIRECTORY=//p' "slurm-${job_id}.log" | head -n 1)
+if [[ -n "$run_dir" ]] && grep -qx complete "$run_dir/run-status.txt"; then
+    tar -czf "$HOME/piclas_cloud/He_D100um_job_${job_id}.tar.gz" -C "$(dirname "$run_dir")" "$(basename "$run_dir")"
+    ls -lh "$HOME/piclas_cloud/He_D100um_job_${job_id}.tar.gz"
+else
+    printf '%s\n' '作业尚未成功结束，请先看 Slurm 日志和运行状态。'
+fi
+
+从平台「文件管理」下载这个 tar.gz。也可回到第 2 步的 Windows PowerShell，
+用保存过的 SSH 连接变量执行：
+
+$JobId = Read-Host '正式作业号'
+scp -P $SshPort "${ClusterUser}@${ClusterHost}:piclas_cloud/He_D100um_job_${JobId}.tar.gz" .
+
+把压缩包解压得到的完整运行目录放进本机：
+
+E:\PICLas_Local_Project\helium_pulse\cases\He_W_D100um_TaperR2um_Jia2023\runs
+
+保留目录中的 HDF5、分析 CSV、求解日志和 MODEL_SETTINGS.md。刷新工作台，
+选择新增的运行结果，即可回放电子密度。
+
+参考资料
+--------
+Slurm 提交命令 https://slurm.schedmd.com/sbatch.html
+PICLas 安装说明 https://piclas.readthedocs.io/en/latest/userguide/installation.html

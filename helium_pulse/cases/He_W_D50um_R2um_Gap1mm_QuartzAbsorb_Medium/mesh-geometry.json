@@ -1,0 +1,21 @@
+{
+  "tube_bore_um": 50.0,
+  "tip_gap_um": 1000.0,
+  "domain_length_um": 1300.0,
+  "tube_outer_um": 150.0,
+  "domain_width_um": 150.0,
+  "tip_radius_um": 2,
+  "radius_over_bore": 0.04,
+  "structure": "tube_only",
+  "mesh_method": "axisymmetric",
+  "mesh_settings": {
+    "tip_gap_subdivisions": 2,
+    "quartz_first_percent": 2,
+    "cap_layers": 6,
+    "tip_radial_layers": 8,
+    "quartz_layers": 8,
+    "axial_max_um": 25,
+    "bore_layers": 14,
+    "wall_first_percent": 2.1739130434782608
+  }
+}

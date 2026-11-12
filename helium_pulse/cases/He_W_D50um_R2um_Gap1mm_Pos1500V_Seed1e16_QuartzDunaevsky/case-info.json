@@ -1,0 +1,37 @@
+{
+  "display_name": "钨针｜50 μm｜石英壁总返回模型",
+  "study": "uniform_gap_seed_and_tungsten_effective_emission",
+  "electrode_material": "tungsten",
+  "seed_density_m3": 1e+16,
+  "seed_radius_m": 2.45e-05,
+  "seed_length_m": 0.000998,
+  "seed_start_x_m": -0.000499,
+  "seed_macroparticles_per_species": 2048,
+  "seed_weight": 9.189304239924994,
+  "electron_temperature_eV": 1.0,
+  "ion_temperature_K": 298.0,
+  "ion_induced_yield": 0.15,
+  "electron_reflection_probability": 0.2,
+  "emitted_energy_distribution": "uniform 0..4 eV (assumed low-energy spectrum)",
+  "continuous_volume_source": false,
+  "thermionic_emission": false,
+  "field_emission": false,
+  "secondary_emission_is_effective_assumption": true,
+  "reference_urls": [
+    "https://doi.org/10.1088/1361-6595/aac301",
+    "https://arxiv.org/abs/1803.04026",
+    "https://doi.org/10.1103/PhysRev.96.325",
+    "https://doi.org/10.1088/1361-6595/aad4db",
+    "https://doi.org/10.1063/1.1568344"
+  ],
+  "limitations": [
+    "预电离代表脉冲前残余电荷，不代表冷气体自然背景。",
+    "gamma=0.15 与电子反射0.2是有效假设，未标定真实钨针的污染、粗糙度与入射能量依赖。",
+    "发射能谱0..4 eV为低能近似，不是钨针实测能谱。",
+    "仍为简化纯He化学，无He2+、亚稳态、VUV光发射或杂质反应。",
+    "保留864单元网格便于与原始基线比较；等离子体数值收敛尚未证明。",
+    "石英总返回产额沿用低能电子束线性拟合，包含反射与二次发射。角分布、返回能谱及实管低能数据仍有不确定性。"
+  ],
+  "quartz_wall_model": "Dunaevsky2003_linear_total_return",
+  "reference_run": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020\\runs\\20261111-114633-research-l6wfPv"
+}

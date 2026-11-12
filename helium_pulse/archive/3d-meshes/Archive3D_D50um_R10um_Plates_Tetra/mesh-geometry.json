@@ -1,0 +1,14 @@
+{
+  "domain_length_um": 1300.0,
+  "domain_width_um": 260.0,
+  "plate_gap_um": 100,
+  "plate_thickness_um": 60,
+  "tube_bore_um": 50.0,
+  "tube_outer_um": 150,
+  "tip_gap_um": 1000,
+  "tip_radius_um": 10.0,
+  "tip_mesh_um": 5.0,
+  "bulk_mesh_um": 42,
+  "electrode_size_mode": "ratio",
+  "radius_over_bore": 0.2
+}

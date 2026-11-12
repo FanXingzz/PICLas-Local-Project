@@ -1,0 +1,9 @@
+{
+  "parameter.ini": "2137543d525c2fee6049ad24aba763fa26c17d51e15ba030289050b7c1975006",
+  "DSMC.ini": "9fe96661de836b7bdd607282e1e71e94bcf3c63089c24e2edbc31ded4e0e64e1",
+  "geometry.json": "755a615ae783a5f89c687bd0be3f5f1caff3e7195f69817a9507dc4226f049d0",
+  "helium_mesh.h5": "fe19cc018233bcf2e85791cafda39f49f19b9aac6222503b6aa33289db454e95",
+  "XSec_Database_He_Plasma.h5": "3af29701c4e496871cad351883f69803bc7e979998914820239328e43f11a7e0",
+  "Electronic-State-Database.h5": "78ac723226adec19159db92ab36bdf5c3fd36aca8f571cf659679387d8fa8fde",
+  "CHEMISTRY_PLAN.json": "60bda7296e6cc4f1c5b87c356440f50c4b3f11ab70f4dd66a71f17923176b43b"
+}

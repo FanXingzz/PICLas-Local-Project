@@ -1,0 +1,19 @@
+{
+  "tube_bore_um": 50.0,
+  "tip_gap_um": 1000.0,
+  "domain_length_um": 1300.0,
+  "tube_outer_um": 150.0,
+  "domain_width_um": 150.0,
+  "tip_radius_um": 2.0,
+  "radius_over_bore": 0.04,
+  "structure": "tube_only",
+  "mesh_method": "swept",
+  "mesh_settings": {
+    "circumferential_segments": 32,
+    "cap_layers": 6,
+    "bore_layers": 12,
+    "wall_first_percent": 2.5,
+    "quartz_layers": 4,
+    "axial_max_um": 30.0
+  }
+}

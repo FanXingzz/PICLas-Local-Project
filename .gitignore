@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.lock
+.workbench-trash/
+_migration/
+runtime/
+**/runs/
+*.h5
+*.vtu
+*.vtm
+*.npz
+*.log

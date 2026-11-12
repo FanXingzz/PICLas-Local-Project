@@ -1,0 +1,10 @@
+{
+  "D50um_xr_coarse": "cases/He_D50um_R2um_Gap1mm_Pos1500V_AnodeSeed_NoEmission",
+  "D50um_swept_coarse": "archive/3d-meshes/Archive3D_D50um_R2um_Plates_Swept_Coarse",
+  "D50um_swept_medium": "archive/3d-meshes/Archive3D_D50um_R2um_Plates_Swept_Medium",
+  "D50um_swept_fine": "archive/3d-meshes/Archive3D_D50um_R2um_Plates_Swept_Fine",
+  "D50um_tube_mok1tk48": "archive/3d-meshes/Archive3D_D50um_R2um_Tube_Swept_Coarse",
+  "D50um_tube_exli_3zb": "archive/3d-meshes/Archive3D_D50um_R2um_Tube_Swept_Medium",
+  "D50um_tube_ky35dics": "archive/3d-meshes/Archive3D_D50um_R2um_Tube_Swept_Fine",
+  "D50um_u5pg8ftc": "archive/3d-meshes/Archive3D_D50um_R10um_Plates_Tetra"
+}

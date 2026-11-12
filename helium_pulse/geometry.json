@@ -1,0 +1,12 @@
+{
+  "domain_length_um": 1300,
+  "domain_width_um": 260,
+  "plate_gap_um": 100,
+  "plate_thickness_um": 60,
+  "tube_bore_um": 100,
+  "tube_outer_um": 150,
+  "tip_gap_um": 1000,
+  "tip_radius_um": 20,
+  "tip_mesh_um": 14,
+  "bulk_mesh_um": 42
+}

@@ -1,0 +1,42 @@
+{
+  "display_name": "100 μm｜钨针 R2 μm｜Jia 六物种",
+  "study": "uniform_gap_seed_and_tungsten_effective_emission",
+  "electrode_material": "tungsten",
+  "seed_density_m3": 1e+16,
+  "seed_radius_m": 4.95e-05,
+  "seed_length_m": 0.000998,
+  "seed_start_x_m": -0.000499,
+  "seed_macroparticles_per_species": 2048,
+  "seed_weight": 37.51119152665758,
+  "electron_temperature_eV": 1.0,
+  "ion_temperature_K": 298.0,
+  "ion_induced_yield": 0.15,
+  "electron_reflection_probability": 0.2,
+  "emitted_energy_distribution": "uniform 0..4 eV (assumed low-energy spectrum)",
+  "continuous_volume_source": false,
+  "thermionic_emission": false,
+  "field_emission": false,
+  "secondary_emission_is_effective_assumption": true,
+  "reference_urls": [
+    "https://doi.org/10.1088/1361-6595/aac301",
+    "https://arxiv.org/abs/1803.04026",
+    "https://doi.org/10.1103/PhysRev.96.325",
+    "https://doi.org/10.1088/1361-6595/aad4db",
+    "https://doi.org/10.1063/1.1568344",
+    "https://doi.org/10.1088/1361-6595/ac6130"
+  ],
+  "limitations": [
+    "使用 Biagi v7.1 的基态电子碰撞截面。R2 仅输运 19.82 eV 三重态，Jia 的流体模型使用 Morgan 截面。",
+    "R4/R5 由 Maxwell 平均速率反推有效截面，复合温度取局部速度二阶矩并以气体温度为下限。",
+    "石英和钨壁对两类亚稳态全猝灭。亚稳态与基态 He 的弹性输运沿用有效 VHS 参数，分子态内部自由度未分辨。",
+    "采用固定纯氦储库，未加入杂质或光电离。钨表面有效产额和反射概率待实测标定。"
+  ],
+  "quartz_wall_model": "absorb",
+  "reference_run": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020\\runs\\20261111-114633-research-l6wfPv",
+  "mesh_reference": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D100um_R2um_Gap1mm_Pos1500V_Seed1e16_QuartzAbsorb\\runs\\20261111-125011-research-QZ3sBc",
+  "geometry_reference": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D100um_R2um_Gap1mm_QuartzAbsorb_TipFine",
+  "review_pending": false,
+  "cloned_from": "cases/He_W_D100um_TaperR2um_He2_Corrected",
+  "network_status": "ready",
+  "protect_from_deletion": true
+}

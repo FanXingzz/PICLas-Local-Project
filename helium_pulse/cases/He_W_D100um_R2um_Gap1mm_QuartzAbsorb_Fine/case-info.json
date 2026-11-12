@@ -1,0 +1,37 @@
+{
+  "display_name": "钨针｜100 μm｜石英吸收与充电｜细档加密",
+  "study": "uniform_gap_seed_and_tungsten_effective_emission",
+  "electrode_material": "tungsten",
+  "seed_density_m3": 1e+16,
+  "seed_radius_m": 4.95e-05,
+  "seed_length_m": 0.000998,
+  "seed_start_x_m": -0.000499,
+  "seed_macroparticles_per_species": 2048,
+  "seed_weight": 37.51119152665758,
+  "electron_temperature_eV": 1.0,
+  "ion_temperature_K": 298.0,
+  "ion_induced_yield": 0.15,
+  "electron_reflection_probability": 0.2,
+  "emitted_energy_distribution": "uniform 0..4 eV (assumed low-energy spectrum)",
+  "continuous_volume_source": false,
+  "thermionic_emission": false,
+  "field_emission": false,
+  "secondary_emission_is_effective_assumption": true,
+  "reference_urls": [
+    "https://doi.org/10.1088/1361-6595/aac301",
+    "https://arxiv.org/abs/1803.04026",
+    "https://doi.org/10.1103/PhysRev.96.325",
+    "https://doi.org/10.1088/1361-6595/aad4db",
+    "https://doi.org/10.1063/1.1568344"
+  ],
+  "limitations": [
+    "预电离代表脉冲前残余电荷，不代表冷气体自然背景。",
+    "gamma=0.15 与电子反射0.2是有效假设，未标定真实钨针的污染、粗糙度与入射能量依赖。",
+    "发射能谱0..4 eV为低能近似，不是钨针实测能谱。",
+    "仍为简化纯He化学，无He2+、亚稳态、VUV光发射或杂质反应。",
+    "圆头及石英壁加密网格。用于静电收敛对照，PIC-MCC 时间步与宏粒子统计需独立验证。"
+  ],
+  "quartz_wall_model": "absorb",
+  "reference_run": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D50um_R2um_Gap1mm_Pos1500V_Seed1e16_SEE015_Refl020\\runs\\20261111-114633-research-l6wfPv",
+  "mesh_reference": "E:\\PICLas_Local_Project\\helium_pulse\\cases\\He_W_D100um_R2um_Gap1mm_Pos1500V_Seed1e16_QuartzAbsorb\\runs\\20261111-125011-research-QZ3sBc"
+}

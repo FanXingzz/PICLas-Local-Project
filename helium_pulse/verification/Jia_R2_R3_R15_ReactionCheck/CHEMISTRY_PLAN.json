@@ -1,0 +1,491 @@
+{
+  "source": "https://doi.org/10.1088/1361-6463/ac9eca",
+  "hold_reason": "六物种已接入，等待短算和反应收支核对。",
+  "species": {
+    "He": {
+      "label": "He",
+      "he_atoms": 1,
+      "charge": 0
+    },
+    "He+": {
+      "label": "He⁺",
+      "he_atoms": 1,
+      "charge": 1
+    },
+    "e": {
+      "label": "e⁻",
+      "he_atoms": 0,
+      "charge": -1
+    },
+    "He2+": {
+      "label": "He₂⁺",
+      "he_atoms": 2,
+      "charge": 1
+    },
+    "He*": {
+      "label": "He*",
+      "he_atoms": 1,
+      "charge": 0
+    },
+    "He2*": {
+      "label": "He₂*",
+      "he_atoms": 2,
+      "charge": 0
+    }
+  },
+  "reactions": [
+    {
+      "id": 1,
+      "equation": "e⁻ + He → e⁻ + He",
+      "reactants": [
+        "e",
+        "He"
+      ],
+      "products": [
+        "e",
+        "He"
+      ],
+      "rate": {
+        "kind": "cross_section",
+        "coefficient": null,
+        "unit": "",
+        "note": "PICLas 基线 Biagi v7.1 弹性截面；Jia 采用 Morgan。"
+      }
+    },
+    {
+      "id": 2,
+      "equation": "e⁻ + He → e⁻ + He*",
+      "reactants": [
+        "e",
+        "He"
+      ],
+      "products": [
+        "e",
+        "He*"
+      ],
+      "rate": {
+        "kind": "cross_section",
+        "coefficient": null,
+        "unit": "",
+        "note": "Biagi v7.1 · 19.82 eV。将碰撞后被激发的储库原子保留为 He*。"
+      }
+    },
+    {
+      "id": 3,
+      "equation": "e⁻ + He → e⁻ + e⁻ + He⁺",
+      "reactants": [
+        "e",
+        "He"
+      ],
+      "products": [
+        "e",
+        "e",
+        "He+"
+      ],
+      "rate": {
+        "kind": "cross_section",
+        "coefficient": null,
+        "unit": "",
+        "note": "Biagi v7.1 · 24.587 eV。"
+      }
+    },
+    {
+      "id": 4,
+      "equation": "e⁻ + He* → e⁻ + e⁻ + He⁺",
+      "reactants": [
+        "e",
+        "He*"
+      ],
+      "products": [
+        "e",
+        "e",
+        "He+"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 1.28e-13,
+        "unit": "m³/s",
+        "note": "Tₑ^0.6 exp(−4.78/Tₑ)"
+      }
+    },
+    {
+      "id": 5,
+      "equation": "e⁻ + He₂* → e⁻ + e⁻ + He₂⁺",
+      "reactants": [
+        "e",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "e",
+        "He2+"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 9.75e-16,
+        "unit": "m³/s",
+        "note": "Tₑ^0.71 exp(−3.4/Tₑ)"
+      }
+    },
+    {
+      "id": 6,
+      "equation": "e⁻ + He* → e⁻ + He",
+      "reactants": [
+        "e",
+        "He*"
+      ],
+      "products": [
+        "e",
+        "He"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 2.9e-15,
+        "unit": "m³/s",
+        "note": "超弹性退激"
+      }
+    },
+    {
+      "id": 7,
+      "equation": "e⁻ + He₂* → e⁻ + He + He",
+      "reactants": [
+        "e",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 3.8e-15,
+        "unit": "m³/s",
+        "note": "电子碰撞解离"
+      }
+    },
+    {
+      "id": 8,
+      "equation": "e⁻ + He⁺ → He* + hν",
+      "reactants": [
+        "e",
+        "He+"
+      ],
+      "products": [
+        "He*"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 6.78e-19,
+        "unit": "m³/s",
+        "note": "Tₑ^−0.5，另有光子产物"
+      }
+    },
+    {
+      "id": 9,
+      "equation": "e⁻ + e⁻ + He⁺ → e⁻ + He*",
+      "reactants": [
+        "e",
+        "e",
+        "He+"
+      ],
+      "products": [
+        "e",
+        "He*"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 7.8e-50,
+        "unit": "m⁶/s",
+        "note": "(Tₑ/Tg)^−4.4"
+      }
+    },
+    {
+      "id": 10,
+      "equation": "e⁻ + He + He⁺ → He + He*",
+      "reactants": [
+        "e",
+        "He",
+        "He+"
+      ],
+      "products": [
+        "He",
+        "He*"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 7.4e-47,
+        "unit": "m⁶/s",
+        "note": "(Tₑ/Tg)^−2"
+      }
+    },
+    {
+      "id": 11,
+      "equation": "e⁻ + He₂⁺ → He + He*",
+      "reactants": [
+        "e",
+        "He2+"
+      ],
+      "products": [
+        "He",
+        "He*"
+      ],
+      "rate": {
+        "kind": "electron_temperature",
+        "coefficient": 7.12e-21,
+        "unit": "m³/s",
+        "note": "(Tₑ/Tg)^−1.5"
+      }
+    },
+    {
+      "id": 12,
+      "equation": "e⁻ + e⁻ + He₂⁺ → e⁻ + He* + He",
+      "reactants": [
+        "e",
+        "e",
+        "He2+"
+      ],
+      "products": [
+        "e",
+        "He*",
+        "He"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 2.8e-32,
+        "unit": "m⁶/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 13,
+      "equation": "e⁻ + e⁻ + He₂⁺ → e⁻ + He₂*",
+      "reactants": [
+        "e",
+        "e",
+        "He2+"
+      ],
+      "products": [
+        "e",
+        "He2*"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 1.2e-33,
+        "unit": "m⁶/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 14,
+      "equation": "e⁻ + He + He₂⁺ → He + He + He*",
+      "reactants": [
+        "e",
+        "He",
+        "He2+"
+      ],
+      "products": [
+        "He",
+        "He",
+        "He*"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 3.5e-39,
+        "unit": "m⁶/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 15,
+      "equation": "e⁻ + He + He₂⁺ → He₂* + He",
+      "reactants": [
+        "e",
+        "He",
+        "He2+"
+      ],
+      "products": [
+        "He2*",
+        "He"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 1.5e-39,
+        "unit": "m⁶/s",
+        "note": "采用 Martens 表 3.1 第 11 条和邹翀等表 1 R11 的分子支路。Jia 和周毅茹的原表写法见 R15_SOURCE_REVIEW.md。"
+      }
+    },
+    {
+      "id": 16,
+      "equation": "He + He + He⁺ → He + He₂⁺",
+      "reactants": [
+        "He",
+        "He",
+        "He+"
+      ],
+      "products": [
+        "He",
+        "He2+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 1.1e-43,
+        "unit": "m⁶/s",
+        "note": "He⁺ 三体缔合"
+      }
+    },
+    {
+      "id": 17,
+      "equation": "He* + He* → e⁻ + He₂⁺",
+      "reactants": [
+        "He*",
+        "He*"
+      ],
+      "products": [
+        "e",
+        "He2+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 2.03e-15,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 18,
+      "equation": "He* + He* → e⁻ + He + He⁺",
+      "reactants": [
+        "He*",
+        "He*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 8.7e-16,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 19,
+      "equation": "He* + He₂* → e⁻ + He + He₂⁺",
+      "reactants": [
+        "He*",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He2+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 2e-15,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 20,
+      "equation": "He* + He₂* → e⁻ + He + He + He⁺",
+      "reactants": [
+        "He*",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He",
+        "He+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 5e-16,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 21,
+      "equation": "He₂* + He₂* → e⁻ + He + He + He₂⁺",
+      "reactants": [
+        "He2*",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He",
+        "He2+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 1.5e-15,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 22,
+      "equation": "He₂* + He₂* → e⁻ + He + He + He + He⁺",
+      "reactants": [
+        "He2*",
+        "He2*"
+      ],
+      "products": [
+        "e",
+        "He",
+        "He",
+        "He",
+        "He+"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 3e-16,
+        "unit": "m³/s",
+        "note": ""
+      }
+    },
+    {
+      "id": 23,
+      "equation": "He + He + He* → He + He₂*",
+      "reactants": [
+        "He",
+        "He",
+        "He*"
+      ],
+      "products": [
+        "He",
+        "He2*"
+      ],
+      "rate": {
+        "kind": "constant",
+        "coefficient": 2e-46,
+        "unit": "m⁶/s",
+        "note": ""
+      }
+    }
+  ],
+  "surface_reference": {
+    "reactions": [
+      "He⁺ → He",
+      "He₂⁺ → 2He",
+      "He* → He",
+      "He₂* → 2He"
+    ],
+    "cathode_ion_yield": {
+      "He+": 0.1,
+      "He2+": 0.05
+    },
+    "ceramic_ion_yield": {
+      "He+": 0.01,
+      "He2+": 0.005
+    },
+    "notes": "论文中的陶瓷数据记录为参考，应用到本项目石英时应单独标明。截图未给出各条目的边界选择和反应概率。"
+  }
+}

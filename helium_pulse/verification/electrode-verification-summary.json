@@ -1,0 +1,32 @@
+{
+  "electron_absorb_p0": {
+    "time_s": 1e-13,
+    "electrons_before": 128.00000000000006,
+    "electrons_after": 0.0,
+    "ions_before": 0.0,
+    "ions_after": 0.0,
+    "ground_electron_absorbed": 128.0,
+    "ground_ion_absorbed": 0.0,
+    "ground_electron_emitted": 0.0
+  },
+  "electron_reflect_p1": {
+    "time_s": 1e-13,
+    "electrons_before": 128.00000000000006,
+    "electrons_after": 137.99999999999983,
+    "ions_before": 0.0,
+    "ions_after": 10.000000000000004,
+    "ground_electron_absorbed": 0.0,
+    "ground_ion_absorbed": 0.0,
+    "ground_electron_emitted": 0.0
+  },
+  "ion_emit_gamma1": {
+    "time_s": 1e-13,
+    "electrons_before": 0.0,
+    "electrons_after": 128.0000000000001,
+    "ions_before": 128.00000000000006,
+    "ions_after": 0.0,
+    "ground_electron_absorbed": 0.0,
+    "ground_ion_absorbed": 128.0,
+    "ground_electron_emitted": 128.0000000000002
+  }
+}
