@@ -3,11 +3,12 @@ import hashlib
 import json
 import h5py
 
-from record_model_settings import entries
+from piclas_ini import Parameters, entries, real
 
 
 INPUTS = ("parameter.ini", "DSMC.ini", "geometry.json", "helium_mesh.h5",
-          "XSec_Database_He_Plasma.h5", "Electronic-State-Database.h5", "CHEMISTRY_PLAN.json")
+          "XSec_Database_He_Plasma.h5", "Electronic-State-Database.h5", "CHEMISTRY_PLAN.json",
+          "visualization.ini")
 SPECIES = {"electron": "e⁻", "HeIon1": "He⁺", "He2Ion1": "He₂⁺", "HeMeta": "He*", "He2Meta": "He₂*"}
 
 
@@ -46,9 +47,9 @@ def validate_plan(plan):
 def describe_case(directory, geometry_ready):
     info = json_file(directory/"case-info.json")
     plan = json_file(directory/"CHEMISTRY_PLAN.json")
-    params = dict(entries((directory/"parameter.ini").read_text(encoding="utf-8-sig")))
+    parameter_entries = entries((directory/"parameter.ini").read_text(encoding="utf-8-sig"))
     dsmc = directory/"DSMC.ini"
-    params.update(entries(dsmc.read_text(encoding="utf-8-sig")) if dsmc.is_file() else [])
+    params = Parameters(parameter_entries + (entries(dsmc.read_text(encoding="utf-8-sig")) if dsmc.is_file() else []))
     names = [params.get(f"Part-Species{i}-SpeciesName", f"物种 {i}")
              for i in range(1, int(params.get("Part-nSpecies", "0"))+1)]
     names = [SPECIES.get(name, name) for name in names]
@@ -70,7 +71,13 @@ def describe_case(directory, geometry_ready):
     ]
     blocked = bool(info.get("review_pending") or info.get("network_status") == "draft" or changed)
     if info.get("solver_profile") == "jia_initial_state":
-        checks.append({"label": "求解器", "value": "Jia 初始状态独立求解器"})
+        run_settings = dict(entries((directory/"run-info.txt").read_text(encoding="utf-8"))) if run else {}
+        dynamic = not run or run_settings.get("solver_variant") == "jia_dynamic"
+        checks.append({"label": "求解器", "value": "Jia 动态负载均衡与宏粒子权重求解器" if dynamic
+                       else "Jia 初始状态独立求解器"})
+        build_digest = run_settings.get("solver_build_inputs_sha256")
+        if build_digest:
+            checks.append({"label": "求解器构建输入 SHA-256", "value": build_digest})
         validation = json_file(directory/"review-checks.json")
         if validation.get("status") == "passed":
             value = "6 ps 初态、三界面发射与石英充电验证通过"
@@ -86,6 +93,9 @@ def describe_case(directory, geometry_ready):
     if run:
         state = next((directory/name for name in ("job-status.txt", "run-status.txt") if (directory/name).is_file()), None)
         checks.append({"label": "运行状态", "value": state.read_text().strip() if state else "状态待写入"})
+        conversion_state = directory/"conversion-status.txt"
+        if conversion_state.is_file():
+            checks.append({"label": "VTU 导出状态", "value": conversion_state.read_text().strip()})
 
     reactions = []
     if "XSec_Database_He_Plasma.h5" in hashes:
@@ -102,7 +112,7 @@ def describe_case(directory, geometry_ready):
         reactions.append({"name": f"DSMC {index} · {params.get(prefix+'ReactionModel', '')}",
                           "detail": f"{params.get(prefix+'Reactants', '')} → {params.get(prefix+'Products', '')}"})
     conversion = params.get("Particles-He2-ThreeBodyRate")
-    if conversion and float(conversion) > 0:
+    if conversion and real(conversion) > 0:
         reactions.append({"name": "He⁺ + 2He → He₂⁺ + He", "detail": f"定制 MCC · {conversion} m⁶/s"})
 
     surfaces = []
@@ -126,7 +136,7 @@ def describe_case(directory, geometry_ready):
                                    else params["Particles-He2-MetalYield"])
             if molecular_yield is not None:
                 details.append(f"He₂⁺ γ {molecular_yield}")
-        swaps = [value for key, value in params.items() if key.startswith(prefix+"SpeciesSwaps")]
+        swaps = [value for key, value in parameter_entries if key.casefold().startswith(prefix.casefold()+"speciesswaps")]
         if swaps:
             details.append("物种转换 " + "、".join(swaps))
         surfaces.append({"name": name, "detail": " · ".join(details)})

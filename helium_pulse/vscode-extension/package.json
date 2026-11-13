@@ -3,7 +3,7 @@
   "displayName": "PICLas 工作台",
   "description": "在 VS Code 中查看 PICLas 模型、参数和放电时间序列。",
   "publisher": "local-piclas",
-  "version": "1.5.7",
+  "version": "1.5.14",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Visualization"],
   "main": "./extension.js",

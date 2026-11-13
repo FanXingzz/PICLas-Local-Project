@@ -2,18 +2,26 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "PICLas: Build Jia dynamic solver",
+      "type": "process",
+      "command": "wsl.exe",
+      "args": ["-d", "Ubuntu-24.04", "--cd", "${workspaceFolder}", "--", "bash", "solver/jia_dynamic/build_solver.sh"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
       "label": "PICLas: Build helium pulse solver",
       "type": "process",
       "command": "wsl.exe",
-      "args": ["-d", "Ubuntu-24.04", "--cd", "${workspaceFolder}", "--", "bash", "./build_solver.sh"],
-      "group": { "kind": "build", "isDefault": true },
+      "args": ["-d", "Ubuntu-24.04", "--cd", "${workspaceFolder}", "--", "bash", "build_solver.sh"],
+      "group": "build",
       "problemMatcher": []
     },
     {
       "label": "PICLas: Build helium mesh",
       "type": "process",
       "command": "wsl.exe",
-      "args": ["-d", "Ubuntu-24.04", "--cd", "${workspaceFolder}", "--", "bash", "./build_mesh.sh"],
+      "args": ["-d", "Ubuntu-24.04", "--cd", "${workspaceFolder}", "--", "bash", "build_mesh.sh"],
       "problemMatcher": []
     },
     {

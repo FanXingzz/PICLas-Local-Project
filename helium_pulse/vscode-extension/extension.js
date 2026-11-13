@@ -88,12 +88,6 @@ function moveToProjectTrash(root, key) {
     return path.relative(project, destination);
 }
 
-function wslPath(file) {
-    const drive = path.win32.parse(file).root;
-    if (!/^[a-z]:\\$/i.test(drive)) throw new Error('请在 Windows 本地打开此项目。');
-    return `/mnt/${drive[0].toLowerCase()}/${file.slice(drive.length).replace(/\\/g, '/')}`;
-}
-
 function htmlFor(webview, extension) {
     const asset = name => webview.asWebviewUri(vscode.Uri.joinPath(extension, 'media', name)).toString();
     const template = fs.readFileSync(path.join(extension.fsPath, 'media', 'index.html'), 'utf8');
@@ -124,12 +118,14 @@ function activate(context) {
             panel.webview.options = { enableScripts: true, localResourceRoots: [
                 vscode.Uri.joinPath(context.extensionUri, 'media')
             ] };
-            const methods = new Set(['catalog', 'describe', 'render', 'clone', 'paraview', 'selfCheck', 'runProgress']);
+            const methods = new Set(['catalog', 'describe', 'render', 'clone', 'paraview', 'selfCheck', 'runProgress',
+                'adaptiveWeightSettings', 'saveAdaptiveWeight']);
             let disposed = false;
             const tell = message => { if (!disposed) panel.webview.postMessage(message); };
             const taskDone = vscode.tasks.onDidEndTaskProcess(event => {
                 if (event.execution.task.definition.type !== 'piclas-workbench') return;
-                tell({ event: 'taskDone', code: event.exitCode, case: event.execution.task.definition.case });
+                const definition = event.execution.task.definition;
+                tell({ event: 'taskDone', code: event.exitCode, case: definition.case, job: definition.job });
             });
             const listener = panel.webview.onDidReceiveMessage(async request => {
                 if (request.event === 'firstPlotLoaded') {
@@ -162,21 +158,20 @@ function activate(context) {
                     } else if (method === 'delete' || method === 'deleteCase') {
                         const isCase = method === 'deleteCase';
                         const group = isCase ? 'models' : 'runs';
-                        const keyPattern = isCase ? /^cases\/[^/]+$/ : /^cases\/[^/]+\/runs\/[^/]+$/;
                         const findItem = async () => {
                             const items = (await bridge.call('catalog'))[group];
                             const item = items.find(entry => entry.id === args.key);
+                            const keyPattern = isCase ? /^cases\/[^/]+$/ : item?.adaptive
+                                ? /^verification\/[^/]+\/runs\/[^/]+$/ : /^cases\/[^/]+\/runs\/[^/]+$/;
                             if (!item || !keyPattern.test(item.id)) {
-                                throw new Error(isCase ? '请选择氦气算例。' : '请选择一项验证结果。');
+                                throw new Error(isCase ? '请选择氦气算例。' : '请选择一项可移走的运行结果。');
                             }
-                            if (activeTask?.caseId === (isCase ? item.id : item.case)) {
+                            const caseId = isCase ? item.id : item.case;
+                            if (caseId && activeTask?.caseId === caseId) {
                                 throw new Error('该算例有工作台任务正在运行，暂时不能删除。');
                             }
-                            if (isCase && item.deleteBlock) {
-                                throw new Error(item.deleteBlock);
-                            }
                             if (!item.deletable) {
-                                throw new Error('请选择已完成或已标记无效的验证结果。');
+                                throw new Error(item.deleteBlock || '此运行结果已保留。');
                             }
                             return item;
                         };
@@ -186,7 +181,7 @@ function activate(context) {
                                 (item.formalRunCount ? `其中 ${item.formalRunCount} 个是已完成的正式结果。` : '')
                             : `${item.label}\n${item.id}`;
                         const confirm = await vscode.window.showWarningMessage(
-                            `将所选${isCase ? '算例' : '验证'}移到项目回收站？`, { modal: true, detail }, '移到项目回收站');
+                            `将所选${isCase ? '算例' : '运行结果'}移到项目回收站？`, { modal: true, detail }, '移到项目回收站');
                         if (confirm === '移到项目回收站') {
                             const current = await findItem();
                             result = moveToProjectTrash(root, current.id);
@@ -215,16 +210,30 @@ function activate(context) {
                     } else if (method === 'task') {
                         if (activeTask) throw new Error('已有一项工作台任务在运行。');
                         const jobs = {
-                            solver: ['编译求解器', 'build_solver.sh'],
+                            solver: ['编译求解器', 'solver/jia_dynamic/build_solver.sh'],
                             mesh: ['生成网格', 'build_mesh.sh'],
                             run: ['完整脉冲', 'run_case.sh'],
                             pilot: ['6 ps 短验证', 'run_case.sh'],
-                            export: ['导出 VTU', 'convert_results.sh']
+                            export: ['导出 VTU', 'convert_results.sh'],
+                            adaptive: ['动态权重短测', null]
                         };
                         const job = jobs[args.name];
                         if (!Array.isArray(job)) throw new Error('请选择工作台任务。');
-                        const [label, script] = job;
-                        const command = ['-d', 'Ubuntu-24.04', '--', 'bash', wslPath(path.join(root, script))];
+                        let [label, script] = job;
+                        if (args.name === 'solver') {
+                            const { models, runs } = await bridge.call('catalog');
+                            const key = runs.find(item => item.id === args.key)?.case || args.key;
+                            const model = models.find(item => item.id === key);
+                            script = model?.solverBuildScript || script;
+                        }
+                        if (args.name === 'adaptive') {
+                            const adaptive = await bridge.call('adaptiveWeightSettings');
+                            if (!adaptive.ready) throw new Error('动态权重求解器尚未编译。');
+                            await bridge.call('saveAdaptiveWeight', { settings: args.adaptive });
+                            if (activeTask) throw new Error('已有一项工作台任务在运行。');
+                            script = adaptive.script;
+                        }
+                        const command = ['-d', 'Ubuntu-24.04', '--cd', root, '--', 'bash', script];
                         if (args.name === 'run' || args.name === 'pilot') {
                             if (!Number.isInteger(args.ranks) || args.ranks < 1 || args.ranks > 6) {
                                 throw new Error('MPI 进程数须为 1 至 6。');
@@ -236,13 +245,18 @@ function activate(context) {
                             if (activeTask) throw new Error('已有一项工作台任务在运行。');
                             command.push(String(args.ranks), args.name === 'run' ? 'research' : 'pilot');
                         }
-                        if (args.name !== 'solver') command.push(wslPath(pathFor(root, args.key)));
+                        if (!['solver', 'adaptive'].includes(args.name)) {
+                            const key = path.relative(root, pathFor(root, args.key)).split(path.sep).join('/');
+                            command.push(key);
+                        }
                         const run = Date.now();
-                        const task = new vscode.Task({ type: 'piclas-workbench', run,
+                        const task = new vscode.Task({ type: 'piclas-workbench', run, job: args.name,
                             case: ['run', 'pilot'].includes(args.name) ? args.key : null }, vscode.TaskScope.Workspace,
                             label, 'PICLas', new vscode.ProcessExecution('wsl.exe', command));
                         task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, clear: true };
-                        const caseId = args.name === 'solver' ? null : args.key.match(/^cases\/[^/]+/)?.[0];
+                        const caseId = ['solver', 'adaptive'].includes(args.name)
+                            ? null : args.key.match(/^cases\/[^/]+/)?.[0];
+                        if (activeTask) throw new Error('已有一项工作台任务在运行。');
                         activeTask = { id: run, caseId };
                         try {
                             await vscode.tasks.executeTask(task);

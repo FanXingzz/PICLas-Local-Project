@@ -99,6 +99,7 @@ figcaption { padding: 12px; }
 .form label, label.ranks { grid-template-columns: minmax(0, 1fr) 104px; align-items: center; }
 .form input, .ranks input { width: 100%; }
 .ranks { margin-bottom: 8px; }
+.field-note { margin: 0 0 8px; color: var(--muted); }
 #assessment { margin: 0 0 10px; color: var(--muted); }
 #self-check input { padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); }
 .check-list { display: grid; gap: 7px; margin: 8px 0; }

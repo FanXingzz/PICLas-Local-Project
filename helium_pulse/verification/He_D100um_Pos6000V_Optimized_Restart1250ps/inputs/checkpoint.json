@@ -1,0 +1,10 @@
+{
+  "source": "helium_pulse/cases/He_Tube2D_D100um_R2um_Gap1mm_Custom_TaperS10um/runs/20261112-144814-research-yV3Q9H",
+  "filename": "helium_pulse_State_000.00000000125000.h5",
+  "sha256": "a3e5f72f2acdad349f25213068dc3f4f50cdd09ad6da81cc2ba99efdf1ee5518",
+  "time_ns": 1.25,
+  "particles": 80664,
+  "electron_macroparticles": 14654,
+  "weighted_electrons": 1099.3780012632806,
+  "dielectric_source_nonzero_dofs": 2400
+}

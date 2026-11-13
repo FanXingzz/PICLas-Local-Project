@@ -2,6 +2,8 @@
 
 ## 当前六物种算例
 
+- [100 μm · +1500 V · Jia 初始状态](He_W_D100um_TaperR2um_Jia_InitialState/)
+- [10 μm · +10 kV · R200 nm](He_Tube2D_D10um_R200nm_Gap1mm_Custom_TaperS1um/) · [50 μm · +10 kV · R1 μm](He_Tube2D_D50um_R1um_Gap1mm_Custom_TaperS5um/)
 - [100 μm · 钨针 R2 μm · Jia 六物种](He_W_D100um_TaperR2um_Jia2023/)
 - [正式脉冲设置](He_W_D100um_TaperR2um_Jia2023/runs/20261112-094232-research-9ZQunK/MODEL_SETTINGS.md) · [运行日志](He_W_D100um_TaperR2um_Jia2023/runs/20261112-094232-research-9ZQunK/solver.log)
 

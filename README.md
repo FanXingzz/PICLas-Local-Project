@@ -4,7 +4,7 @@
 
 ## 在另一台 Windows 电脑上打开
 
-工作台 **1.5.7** 随当前仓库源码提供，包含参数保存、算例重命名和运行进度。已有 Git 检出可用 `git pull` 更新，再双击 [Open-PICLas.cmd](Open-PICLas.cmd) 安装仓库中的新版扩展。
+工作台 **1.5.14** 随当前仓库源码提供，可保存 Jia 算例参数、编辑动态权重和各物种固定合并阈值、查看运行进度及管理算例。已有 Git 检出可用 `git pull` 更新，再双击 [Open-PICLas.cmd](Open-PICLas.cmd) 安装新版扩展。
 
 1. 在 [迁移 Release](https://github.com/FanXingzz/PICLas-Local-Project/releases/tag/migration-2026-11-12) 下载迁移 ZIP 及 SHA-256 校验文件。该归档保留发布时的工作台版本、历史数据和通用预编译求解器。使用新版时，在新目录下载当前源码，将所需数据和 `runtime/` 复制到对应的相对路径。
 2. 将 ZIP 完整解压到本地目录，例如 `D:\Simulation\PICLas-Local-Project`。可在 PowerShell 运行 `Get-FileHash .\PICLas-Local-Project-migration-2026-11-12.zip -Algorithm SHA256`，与校验文件中的值比较。
@@ -21,6 +21,8 @@
 | 100 μm Jia 六物种算例 | [模型设置](helium_pulse/cases/He_W_D100um_TaperR2um_Jia2023/MODEL_SETTINGS.md) · [反应清单](helium_pulse/cases/He_W_D100um_TaperR2um_Jia2023/CHEMISTRY_PLAN.json) |
 | 100 μm 运行快照 | [快照元数据](SNAPSHOT.json) · [运行目录](helium_pulse/cases/He_W_D100um_TaperR2um_Jia2023/runs/20261112-094232-research-9ZQunK/) |
 | Jia 初始状态对照 | [模型设置](helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/MODEL_SETTINGS.md) · [独立求解器说明](helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/SOLVER_SETUP.md) |
+| 10 μm、50 μm 的 +10 kV 算例 | [10 μm 模型](helium_pulse/cases/He_Tube2D_D10um_R200nm_Gap1mm_Custom_TaperS1um/MODEL_SETTINGS.md) · [50 μm 模型](helium_pulse/cases/He_Tube2D_D50um_R1um_Gap1mm_Custom_TaperS5um/MODEL_SETTINGS.md) |
+| 动态负载均衡与宏粒子权重 | [算法调整说明](helium_pulse/docs/算法调整说明.md) · [原始算法](helium_pulse/docs/原始算法.md) |
 | 原始氮气负流注 | [模型设置](official_streamer/pic-mcc/MODEL_SETTINGS.md) · [原始结果目录](official_streamer/pic-mcc/) |
 | 网格和短验证 | [文档索引](helium_pulse/docs/README.md) · [验证目录](helium_pulse/verification/) |
 
@@ -29,6 +31,8 @@
 迁移时 100 μm 六物种正式计算尚在运行，本包以最近一帧已写完的 HDF5 为截点。对应逐步诊断保留到同一时刻，工作台标为「运行快照」。快照时刻和来源以 [SNAPSHOT.json](SNAPSHOT.json) 为准。已完成的历史结果随包保留。缓存、运行锁和已移入项目回收站的文件不纳入迁移包。
 
 ## 在另一台电脑运行或编译
+
+工作台的默认编译任务和「Jia 初始状态」算例调用 [Jia 动态构建脚本](helium_pulse/solver/jia_dynamic/build_solver.sh)。三个 Jia 动态算例的网格及碰撞数据库随源码提供。运行时会核对构建清单和求解器校验值。下方迁移包可用于查看历史结果或运行通用求解器。动态 Jia 算例需要单独编译动态版。
 
 ### 使用随包求解器
 
@@ -54,10 +58,11 @@ sudo apt-get install -y git cmake ninja-build gfortran g++ libopenmpi-dev libope
 git clone https://github.com/piclas-framework/piclas.git "$HOME/piclas"
 export PICLAS_UPSTREAM="$HOME/piclas"
 export PETSC_DIR=/path/to/petsc/install
-bash helium_pulse/build_solver.sh
+bash helium_pulse/solver/jia_dynamic/build_solver.sh
+bash helium_pulse/run_case.sh 6 pilot helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState
 ```
 
-编译脚本在独立工作目录应用项目补丁。可以用 `PICLAS_SOLVER_ROOT` 指定该工作目录，用 `PICLAS_VTK_BIN` 指定自行编译的转换器。随包运行工具的上游源码和项目补丁可分别从 [PICLas 对应提交](https://github.com/piclas-framework/piclas/tree/514af4c6e5ec2a16f75db99295b34b08dfeced90) 和 `runtime/linux-x86_64/solver-source.patch` 取得。
+编译脚本在独立工作目录应用项目补丁。可用 `PICLAS_JIA_DYNAMIC_SOLVER_ROOT` 指定动态版工作目录，`PICLAS_SOLVER_ROOT` 指定通用版工作目录，`PICLAS_VTK_BIN` 指定转换器。随包运行工具的上游源码和项目补丁可分别从 [PICLas 对应提交](https://github.com/piclas-framework/piclas/tree/514af4c6e5ec2a16f75db99295b34b08dfeced90) 和 `runtime/linux-x86_64/solver-source.patch` 取得。
 
 `jia初始状态` 已完成初态、界面发射与石英充电的 6 ps 验证。运行此算例需要先在 WSL 中编译 Jia 独立求解器，再点击「完整脉冲」。可用 `PICLAS_JIA_INITIAL_SOLVER_ROOT` 指定独立构建目录。[编译与验证说明](helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/SOLVER_SETUP.md)
 

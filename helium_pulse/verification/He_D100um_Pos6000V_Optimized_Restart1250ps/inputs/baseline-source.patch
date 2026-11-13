@@ -1,0 +1,743 @@
+diff --git a/src/equations/poisson/equation.f90 b/src/equations/poisson/equation.f90
+index 5777ddf..abc916c 100644
+--- a/src/equations/poisson/equation.f90
++++ b/src/equations/poisson/equation.f90
+@@ -30,6 +30,8 @@ PUBLIC :: DefineParametersEquation
+ PUBLIC :: InitChiTens
+ PUBLIC :: InitRefState
+ !===================================================================================================================================
++REAL, PRIVATE :: PulsePeak, PulseRise, PulseFlat, PulseFall
++
+ CONTAINS
+ 
+ !==================================================================================================================================
+@@ -47,6 +49,10 @@ IMPLICIT NONE
+ !==================================================================================================================================
+ CALL prms%SetSection("Equation")
+ CALL prms%CreateIntOption(      'IniExactFunc'     , 'Define exact function necessary for linear scalar advection')
++CALL prms%CreateRealOption('PulsePeak', 'Positive trapezoidal electrode peak [V]', '1500.')
++CALL prms%CreateRealOption('PulseRise', 'Pulse rise time [s]', '2.e-9')
++CALL prms%CreateRealOption('PulseFlat', 'Pulse plateau time [s]', '5.e-9')
++CALL prms%CreateRealOption('PulseFall', 'Pulse fall time [s]', '2.e-9')
+ CALL prms%CreateRealArrayOption('RefState'         , 'State(s) for electric potential (amplitude, frequency and phase shift).', multiple=.TRUE., no=3)
+ CALL prms%CreateRealArrayOption('IniWavenumber'    , 'TODO-DEFINE-PARAMETER' , '1. , 1. , 1.')
+ CALL prms%CreateRealArrayOption('IniCenter'        , 'TODO-DEFINE-PARAMETER' , '0. , 0. , 0.')
+@@ -129,6 +135,10 @@ END SELECT
+ ! Read the velocity vector from ini file
+ IniWavenumber = GETREALARRAY('IniWavenumber',3,'1.,1.,1.')
+ IniCenter     = GETREALARRAY('IniCenter',3,'0.,0.,0.')
++PulsePeak = GETREAL('PulsePeak')
++PulseRise = GETREAL('PulseRise')
++PulseFlat = GETREAL('PulseFlat')
++PulseFall = GETREAL('PulseFall')
+ IniAmplitude  = GETREAL('IniAmplitude','0.1')
+ IniHalfwidth  = GETREAL('IniHalfwidth','0.1')
+ 
+@@ -580,6 +590,12 @@ CASE(0) ! constant 0.
+ CASE(2) ! Floating voltage that depends on the coupled power. User-specified power input as target value sets the potential.
+   Resu(:) = CoupledPowerPotential(2)
+ #endif /*defined(PARTICLES)*/
++CASE(9100) ! Trapezoidal voltage on a type-2 Dirichlet boundary
++  IF (.NOT.PRESENT(t)) CALL CollectiveStop(__STAMP__,'Pulse boundary requires time')
++  IF (.NOT.(PulsePeak.GT.0.)) CALL CollectiveStop(__STAMP__,'PulsePeak must be positive')
++  IF (PulseRise.LE.0. .OR. PulseFlat.LT.0. .OR. PulseFall.LE.0.) &
++    CALL CollectiveStop(__STAMP__,'Invalid pulse duration')
++  Resu(:) = PulsePeak * MAX(0., MIN(1., t/PulseRise, (PulseRise+PulseFlat+PulseFall-t)/PulseFall))
+ CASE(1001) ! linear in y-z
+     Resu(:)=x(2)*2340 + x(3)*2340
+ CASE(102) !linear: z=-1: 0, z=1, 1000
+diff --git a/src/particles/dsmc/dsmc_bg_gas.f90 b/src/particles/dsmc/dsmc_bg_gas.f90
+index 2c9f6ef..65de8b3 100644
+--- a/src/particles/dsmc/dsmc_bg_gas.f90
++++ b/src/particles/dsmc/dsmc_bg_gas.f90
+@@ -26,6 +26,9 @@ PRIVATE
+ !-----------------------------------------------------------------------------------------------------------------------------------
+ ! Private Part ---------------------------------------------------------------------------------------------------------------------
+ ! Public Part ----------------------------------------------------------------------------------------------------------------------
++REAL :: HeIonConversionRate = 0.
++PUBLIC :: HeIonConversionRate
++LOGICAL, PROTECTED, PUBLIC :: UseJiaChemistry = .FALSE.
+ PUBLIC :: DefineParametersBGG, BGGas_Initialize, BGGas_InsertParticles, DSMC_pairing_bggas, BGGas_DeleteParticles
+ PUBLIC :: BGGas_AssignParticleProperties, BGGas_PhotoIonization, BGGas_InitRegions, BGGas_RegionsSetInternalTemp
+ !===================================================================================================================================
+@@ -42,6 +45,10 @@ USE MOD_ReadInTools ,ONLY: prms
+ IMPLICIT NONE
+ !==================================================================================================================================
+ CALL prms%SetSection("Background gas")
++CALL prms%CreateLogicalOption('Particles-JiaChemistry', 'Enable six-species helium MCC chemistry', '.FALSE.')
++CALL prms%CreateRealOption('Particles-He2-ThreeBodyRate', 'He+ conversion rate coefficient [m^6/s]', '0.')
++CALL prms%CreateRealOption('Particles-He2-MetalYield', 'He2+ yield for metal boundaries using SEE model 7', '-1.')
++CALL prms%CreateRealOption('Particles-He2-QuartzYield', 'He2+ yield for dielectric boundaries using SEE model 7', '-1.')
+ CALL prms%CreateLogicalOption(  'Particles-BGGas-UseDistribution', &
+                                       'Utilization of a cell-local background gas distribution as read-in from a previous '//&
+                                       'DSMC/BGK result using Particles-MacroscopicRestart', '.FALSE.')
+@@ -68,7 +75,7 @@ SUBROUTINE BGGas_Initialize()
+ USE MOD_ReadInTools
+ USE MOD_Globals
+ USE MOD_io_hdf5
+-USE MOD_DSMC_Vars             ,ONLY: BGGas
++USE MOD_DSMC_Vars             ,ONLY: BGGas, He2ElectrodeYield, He2QuartzYield
+ USE MOD_Mesh_Vars             ,ONLY: nElems
+ USE MOD_Particle_Vars         ,ONLY: PDM, Species, nSpecies, UseVarTimeStep, VarTimeStep
+ USE MOD_Restart_Vars          ,ONLY: DoRestart, DoMacroscopicRestart, MacroRestartFileName
+@@ -178,6 +185,30 @@ DO iSpec = 1, nSpecies
+   END IF
+ END DO
+ 
++HeIonConversionRate = GETREAL('Particles-He2-ThreeBodyRate')
++He2ElectrodeYield = GETREAL('Particles-He2-MetalYield')
++He2QuartzYield = GETREAL('Particles-He2-QuartzYield')
++IF (He2QuartzYield.LT.0..AND.He2QuartzYield.NE.-1.) CALL Abort(__STAMP__, 'He2 quartz yield must be nonnegative')
++IF (He2ElectrodeYield.GT.1.) CALL Abort(__STAMP__, 'He2 electrode yield must not exceed one')
++UseJiaChemistry = GETLOGICAL('Particles-JiaChemistry')
++IF (HeIonConversionRate.LE.0..AND..NOT.UseJiaChemistry) He2ElectrodeYield = -1.
++IF (UseJiaChemistry) THEN
++  IF (nSpecies.NE.6.OR.BGGas%NumberOfSpecies.NE.1.OR.BGGas%UseDistribution.OR.BGGas%UseRegions.OR.UseVarTimeStep) &
++    CALL Abort(__STAMP__, 'Jia chemistry requires six species, a uniform He reservoir and a fixed time step')
++  IF (HeIonConversionRate.GT.0..OR.BGGas%MapBGSpecToSpec(1).NE.1) &
++    CALL Abort(__STAMP__, 'Jia chemistry includes R16 and requires species 1 as the sole reservoir')
++  IF (ANY(Species(:)%Name.NE.[CHARACTER(LEN=8) :: 'He','HeIon1','electron','He2Ion1','HeMeta','He2Meta'])) &
++    CALL Abort(__STAMP__, 'Jia chemistry species order is He, HeIon1, electron, He2Ion1, HeMeta, He2Meta')
++END IF
++IF (HeIonConversionRate.LT.0.) CALL Abort(__STAMP__, 'He2 conversion coefficient must be nonnegative')
++IF (HeIonConversionRate.GT.0.) THEN
++  IF (nSpecies.NE.4.OR.BGGas%NumberOfSpecies.NE.1.OR.BGGas%UseDistribution.OR.BGGas%UseRegions.OR.UseVarTimeStep) &
++    CALL Abort(__STAMP__, 'He2 conversion requires the uniform four-species He model and a fixed time step')
++  IF (BGGas%MapBGSpecToSpec(1).NE.1.OR.TRIM(Species(1)%Name).NE.'He'.OR. &
++      TRIM(Species(2)%Name).NE.'HeIon1'.OR.TRIM(Species(4)%Name).NE.'He2Ion1') &
++    CALL Abort(__STAMP__, 'He2 conversion species order is He, HeIon1, electron, He2Ion1')
++END IF
++
+ ! 4.) Read-in a background gas distribution
+ IF(BGGas%UseDistribution) CALL BGGas_ReadInDistribution()
+ 
+diff --git a/src/particles/dsmc/dsmc_main.f90 b/src/particles/dsmc/dsmc_main.f90
+index 8663d62..6581a02 100644
+--- a/src/particles/dsmc/dsmc_main.f90
++++ b/src/particles/dsmc/dsmc_main.f90
+@@ -54,7 +54,7 @@ USE MOD_Symmetry_Vars         ,ONLY: Symmetry
+ USE MOD_LoadBalance_Timers    ,ONLY: LBStartTime, LBElemSplitTime
+ #endif /*USE_LOADBALANCE*/
+ USE MOD_MCC_Vars              ,ONLY: UseMCC
+-USE MOD_MCC                   ,ONLY: MonteCarloCollision
++USE MOD_MCC                   ,ONLY: MonteCarloCollision, WriteJiaReactionCounts
+ ! IMPLICIT VARIABLE HANDLING
+ IMPLICIT NONE
+ !-----------------------------------------------------------------------------------------------------------------------------------
+@@ -150,6 +150,7 @@ IF (CollisMode.NE.0) THEN
+ #endif /*USE_LOADBALANCE*/
+   END DO ! iElem Loop
+ END IF ! CollisMode.NE.0
++CALL WriteJiaReactionCounts()
+ 
+ IF(PDM%ParticleVecLength.GT.PDM%MaxParticleNumber) THEN
+   CALL Abort(__STAMP__&
+diff --git a/src/particles/dsmc/dsmc_vars.f90 b/src/particles/dsmc/dsmc_vars.f90
+index 210b266..9bedd8f 100644
+--- a/src/particles/dsmc/dsmc_vars.f90
++++ b/src/particles/dsmc/dsmc_vars.f90
+@@ -23,6 +23,7 @@ USE mpi_f08
+ USE MOD_Globals_Vars, ONLY: i8
+ ! IMPLICIT VARIABLE HANDLING
+ IMPLICIT NONE
++REAL :: He2ElectrodeYield = -1., He2QuartzYield = -1.
+ PUBLIC
+ SAVE
+ !-----------------------------------------------------------------------------------------------------------------------------------
+diff --git a/src/particles/mcc/mcc.f90 b/src/particles/mcc/mcc.f90
+index fe4d153..f82df7b 100644
+--- a/src/particles/mcc/mcc.f90
++++ b/src/particles/mcc/mcc.f90
+@@ -27,6 +27,9 @@ PRIVATE
+ ! Private Part ---------------------------------------------------------------------------------------------------------------------
+ ! Public Part ----------------------------------------------------------------------------------------------------------------------
+ PUBLIC :: MonteCarloCollision
++PUBLIC :: WriteJiaReactionCounts
++REAL :: JiaReactionCounts(23) = 0.
++REAL :: JiaMaxHazard = 0.
+ !===================================================================================================================================
+ 
+ CONTAINS
+@@ -62,7 +65,7 @@ USE MOD_DSMC_Vars               ,ONLY: newAmbiParts, iPartIndx_NodeNewAmbi
+ USE MOD_part_operations         ,ONLY: RemoveParticle
+ ! ROUTINES
+ USE MOD_DSMC_Analyze            ,ONLY: CalcMeanFreePath
+-USE MOD_DSMC_BGGas              ,ONLY: BGGas_AssignParticleProperties
++USE MOD_DSMC_BGGas              ,ONLY: BGGas_AssignParticleProperties, HeIonConversionRate, UseJiaChemistry
+ USE MOD_part_tools              ,ONLY: GetParticleWeight, CalcVelocity_maxwell_particle, GetNextFreePosition
+ USE MOD_Part_Emission_Tools     ,ONLY: CalcVelocity_maxwell_lpn
+ USE MOD_DSMC_Collis             ,ONLY: DSMC_perform_collision
+@@ -91,7 +94,7 @@ LOGICAL                       :: SplitInProgress, GetInternalEnergy
+ REAL                          :: CollCaseNum, CollProb, VeloBGGPart(1:3), CRela2, GammaFac, SumVibCrossSection
+ REAL                          :: PartStateSplit(1:6), PartPosRefSplit(1:3), PartStateIntSplit(1:3), PartTimeStepSplit, PartMPFSplit
+ INTEGER, ALLOCATABLE          :: VibQuantsParSplit(:), PartIndexCase(:)
+-REAL                          :: ProbNull, dtVar
++REAL                          :: ProbNull, dtVar, ConversionProb, ReservoirTemp
+ INTEGER                       :: nPartTemp
+ !===================================================================================================================================
+ 
+@@ -158,6 +161,22 @@ UseSpecPartNum = 0
+ 
+ IF (CollisMode.EQ.3) ChemReac%MeanEVib_PerIter(1:nSpecies) = 0.0
+ 
++! He+ + He + He -> He2+ + He. The fixed reservoir absorbs stabilization recoil and energy.
++IF (HeIonConversionRate.GT.0.) THEN
++  ConversionProb = 1.-EXP(-HeIonConversionRate*BGGas%NumberDensity(1)**2*dt)
++  ReservoirTemp = Species(1)%Init(1)%MWTemperatureIC
++  DO iLoop = 1, nPart
++    iPart = iPartIndx_NodeTotal(iLoop)
++    IF (PartSpecies(iPart).NE.2) CYCLE
++    CALL RANDOM_NUMBER(iRan)
++    IF (iRan.GE.ConversionProb) CYCLE
++    VeloBGGPart = CalcVelocity_maxwell_particle(1,[ReservoirTemp,ReservoirTemp,ReservoirTemp])
++    PartState(4:6,iPart) = (Species(2)%MassIC*PartState(4:6,iPart)+Species(1)%MassIC*VeloBGGPart)/Species(4)%MassIC
++    IF (ALLOCATED(PartIntEn(iPart)%EElec)) PartIntEn(iPart)%EElec = 0.
++    PartSpecies(iPart) = 4
++  END DO
++END IF
++
+ ! 1.) Counting the number of particles per species and creating a species-specific particle index list
+ DO iLoop = 1, nPart
+   iPart = iPartIndx_NodeTotal(iLoop)
+@@ -502,6 +521,9 @@ DO iSpec = 1, nSpecies
+         Coll_pData(iPair)%PairType = iCase
+         ! Perform collision
+         CALL DSMC_perform_collision(iPair,iElem)
++        IF (UseJiaChemistry.AND.iSpec.EQ.3.AND.jSpec.EQ.1) THEN
++          CALL JiaBackgroundEvent(PartIndex,bggPartIndex)
++        END IF
+         ! If the species of the particle has changed from the background species (e.g. during chemistry) then get a new index for the next particle
+         IF(PartSpecies(bggPartIndex).NE.jSpec) THEN
+           ! Add new particle to the index list
+@@ -596,6 +618,7 @@ DO iLoop = 1, PEM%pNumber(iElem)
+   END IF
+   iPart = PEM%pNext(iPart)
+ END DO
++IF (UseJiaChemistry) CALL JiaCellReactions(iElem,GlobalElemID,Volume,dt)
+ ! Delete the dummy particle
+ IF(bggPartIndex.NE.0) THEN
+   CALL RemoveParticle(bggPartIndex)
+@@ -786,4 +809,326 @@ END DO
+ 
+ END SUBROUTINE MCC_CalcReactionProb
+ 
++! Jia chemistry implementation
++! Six-species, pure-He chemistry for axisymmetric MCC with variable macro weights.
++! Species order: He, He+, electron, He2+, He*, He2*.
++
++SUBROUTINE JiaBackgroundEvent(electronID,gasID)
++USE MOD_Globals_Vars, ONLY: ElementaryCharge
++USE MOD_DSMC_Vars, ONLY: PartIntEn
++USE MOD_Particle_Vars, ONLY: PartSpecies, PartMPF
++IMPLICIT NONE
++INTEGER, INTENT(IN) :: electronID, gasID
++
++! PICLas has already scattered the electron and charged the excitation energy.
++! Retain the excited reservoir atom as a transported metastable.
++IF (PartSpecies(gasID).EQ.1.AND.PartSpecies(electronID).EQ.3) THEN
++  IF (ALLOCATED(PartIntEn(gasID)%EElec)) THEN
++    IF (ABS(PartIntEn(gasID)%EElec(1)/ElementaryCharge-19.82).LT.1.E-5) THEN
++      PartIntEn(gasID)%EElec = 0.
++      PartSpecies(gasID) = 5
++      JiaReactionCounts(2) = JiaReactionCounts(2) + PartMPF(electronID)
++    ELSE
++      JiaReactionCounts(1) = JiaReactionCounts(1) + PartMPF(electronID)
++    END IF
++  END IF
++ELSE IF (PartSpecies(gasID).EQ.2.OR.PartSpecies(electronID).EQ.2) THEN
++  JiaReactionCounts(3) = JiaReactionCounts(3) + PartMPF(electronID)
++END IF
++END SUBROUTINE JiaBackgroundEvent
++
++
++SUBROUTINE JiaCellReactions(cell,globalCell,volume,step)
++USE MOD_Globals, ONLY: Abort
++USE MOD_Globals_Vars, ONLY: BoltzmannConst, ElementaryCharge
++USE MOD_DSMC_Vars, ONLY: BGGas, PartIntEn
++USE MOD_Particle_Vars, ONLY: PEM, PDM, PartSpecies, PartState, PartMPF, Species
++USE MOD_part_operations, ONLY: CreateParticle, RemoveParticle
++USE MOD_part_tools, ONLY: CalcVelocity_maxwell_particle
++IMPLICIT NONE
++INTEGER, INTENT(IN) :: cell, globalCell
++REAL, INTENT(IN) :: volume, step
++INTEGER :: ids(PEM%pNumber(cell)), i, j, id, spec, left, right, a, b, channel, first, last, electronID, heavyID
++INTEGER :: productIon, productNeutral
++REAL :: nHe, gasTemp, gasTe, te, ratio, electronWeight, electronMean(3), electronMoment
++REAL :: relative(3), collisionEnergy, w, hazard, pick, cumulative, rates(23), randomValue, thirdDensity
++REAL :: vElectron(3), vHeavy(3), pElectron(3), pHeavy(3), center(3), energy, firstEnergy
++REAL :: vNew(3), reducedMass, eMass, heavyMass, ionMass, direction(3), tempVelocity(3)
++REAL, PARAMETER :: excitation(6) = [0.,24.587,0.,21.30,19.82,17.90]
++
++nHe = BGGas%NumberDensity(1)
++gasTemp = Species(1)%Init(1)%MWTemperatureIC
++gasTe = BoltzmannConst*gasTemp/ElementaryCharge
++eMass = Species(3)%MassIC
++electronWeight = 0.
++electronMean = 0.
++electronMoment = 0.
++id = PEM%pStart(cell)
++DO i=1,SIZE(ids)
++  ids(i) = id
++  IF (PDM%ParticleInside(id).AND.PartSpecies(id).EQ.3) THEN
++    electronWeight = electronWeight + PartMPF(id)
++    electronMean = electronMean + PartMPF(id)*PartState(4:6,id)
++    electronMoment = electronMoment + PartMPF(id)*SUM(PartState(4:6,id)**2)
++  END IF
++  id = PEM%pNext(id)
++END DO
++te = gasTe
++IF (electronWeight.GT.0.) THEN
++  electronMean = electronMean/electronWeight
++  te = MAX(gasTe,eMass*(electronMoment/electronWeight-SUM(electronMean**2))/(3.*ElementaryCharge))
++END IF
++ratio = te/gasTe
++
++! Each distinct unordered pair is tried once. The macro weight reacted is
++! min(w1,w2); multiplying by max(w1,w2) recovers the physical pair count.
++DO i=1,SIZE(ids)-1
++  left = ids(i)
++  IF (.NOT.PDM%ParticleInside(left)) CYCLE
++  DO j=i+1,SIZE(ids)
++    IF (.NOT.PDM%ParticleInside(left)) EXIT
++    right = ids(j)
++    IF (.NOT.PDM%ParticleInside(right)) CYCLE
++    a = MIN(PartSpecies(left),PartSpecies(right))
++    b = MAX(PartSpecies(left),PartSpecies(right))
++    IF (a.LT.2.OR.(a.EQ.2.AND.b.NE.3).OR.(a.EQ.4).OR.(a.EQ.3.AND.b.EQ.3)) CYCLE
++    rates = 0.
++    IF (a.EQ.3.OR.(a.EQ.2.AND.b.EQ.3)) THEN
++      electronID = left
++      IF (PartSpecies(left).NE.3) electronID = right
++      heavyID = left+right-electronID
++      spec = PartSpecies(heavyID)
++      thirdDensity = MAX(0.,electronWeight-PartMPF(electronID))/volume
++      SELECT CASE(spec)
++      CASE(2)
++        first = 8
++        last = 10
++        rates(8) = 6.78E-19/SQRT(te)
++        rates(9) = 7.8E-50*ratio**(-4.4)*thirdDensity
++        rates(10) = 7.4E-47*ratio**(-2.)*nHe
++      CASE(4)
++        first = 11
++        last = 15
++        rates(11) = 7.12E-21*ratio**(-1.5)
++        rates(12) = 2.8E-32*thirdDensity
++        rates(13) = 1.2E-33*thirdDensity
++        rates(14) = 3.5E-39*nHe
++        rates(15) = 1.5E-39*nHe
++      CASE(5,6)
++        heavyMass = Species(spec)%MassIC
++        reducedMass = eMass*heavyMass/(eMass+heavyMass)
++        relative = PartState(4:6,electronID)-PartState(4:6,heavyID)
++        collisionEnergy = 0.5*reducedMass*SUM(relative**2)/ElementaryCharge
++        IF (spec.EQ.5) THEN
++          first = 4
++          last = 6
++          rates(4) = JiaStepIonization(collisionEnergy,4.78,1.28E-13,0.60)
++          rates(6) = 2.9E-15
++        ELSE
++          first = 5
++          last = 7
++          rates(5) = JiaStepIonization(collisionEnergy,3.4,9.75E-16,0.71)
++          rates(7) = 3.8E-15
++        END IF
++      CASE DEFAULT
++        CYCLE
++      END SELECT
++    ELSE
++      ! Jia uses a mass-action rate k*n^2 for identical reactants.
++      ! There are half as many unordered pairs as ordered pairs.
++      first = 17+2*(a+b-10)
++      last = first+1
++      SELECT CASE(first)
++      CASE(17)
++        rates(17:18) = 2.*[2.03E-15,8.7E-16]
++      CASE(19)
++        rates(19:20) = [2.0E-15,5.0E-16]
++      CASE(21)
++        rates(21:22) = 2.*[1.5E-15,3.0E-16]
++      CASE DEFAULT
++        CYCLE
++      END SELECT
++    END IF
++    hazard = SUM(rates(first:last))*MAX(PartMPF(left),PartMPF(right))*step/volume
++    JiaMaxHazard = MAX(JiaMaxHazard,hazard)
++    IF (hazard.LE.0.) CYCLE
++    CALL RANDOM_NUMBER(randomValue)
++    IF (randomValue.GE.1.-EXP(-hazard)) CYCLE
++    CALL RANDOM_NUMBER(randomValue)
++    pick = randomValue*SUM(rates(first:last))
++    cumulative = 0.
++    DO channel=first,last-1
++      cumulative = cumulative+rates(channel)
++      IF (pick.LT.cumulative) EXIT
++    END DO
++    w = MIN(PartMPF(left),PartMPF(right))
++    IF (channel.LE.15) THEN
++      vElectron = PartState(4:6,electronID)
++      vHeavy = PartState(4:6,heavyID)
++      pElectron = PartState(1:3,electronID)
++      pHeavy = PartState(1:3,heavyID)
++      CALL consume(electronID,w)
++      CALL consume(heavyID,w)
++      electronWeight = MAX(0.,electronWeight-w)
++      SELECT CASE(channel)
++      CASE(4,5)
++        productIon = 2
++        energy = collisionEnergy-4.78
++        IF (channel.EQ.5) THEN
++          productIon = 4
++          energy = collisionEnergy-3.4
++        END IF
++        ionMass = Species(productIon)%MassIC
++        center = (eMass*vElectron+heavyMass*vHeavy)/(eMass+heavyMass)
++        CALL RANDOM_NUMBER(randomValue)
++        ! Resolve outgoing electrons in the Jacobi coordinates of the electron pair
++        ! and of its center relative to the ion. This retains recoil and energy.
++        firstEnergy = randomValue*energy
++        CALL JiaDirection(direction)
++        relative = SQRT(2.*firstEnergy*ElementaryCharge/(0.5*eMass))*direction
++        CALL JiaDirection(direction)
++        reducedMass = (2.*eMass)*ionMass/(2.*eMass+ionMass)
++        vNew = SQRT(2.*(energy-firstEnergy)*ElementaryCharge/reducedMass)*direction
++        CALL emit(productIon,pHeavy,center-(2.*eMass/(2.*eMass+ionMass))*vNew,w)
++        vNew = center+(ionMass/(2.*eMass+ionMass))*vNew
++        CALL emit(3,pElectron,vNew+0.5*relative,w)
++        CALL emit(3,pHeavy,vNew-0.5*relative,w)
++      CASE(6,7)
++        ! Superelastic energy release, with the recoiling He products absorbed by the gas reservoir.
++        center = (eMass*vElectron+heavyMass*vHeavy)/(eMass+heavyMass)
++        energy = collisionEnergy+excitation(spec)
++        CALL JiaDirection(direction)
++        vNew = center+(heavyMass/(eMass+heavyMass))*SQRT(2.*energy*ElementaryCharge/reducedMass)*direction
++        CALL emit(3,pElectron,vNew,w)
++      CASE(8:15)
++        ! Spectator e or background He remain in their reservoirs for these
++        ! zero electron-energy-source channels in the fluid reaction table.
++        productNeutral = 5
++        IF (channel.EQ.13.OR.channel.EQ.15) productNeutral = 6
++        CALL emit(productNeutral,pHeavy,vHeavy,w)
++      END SELECT
++    ELSE
++      pHeavy = PartState(1:3,left)
++      heavyMass = Species(PartSpecies(left))%MassIC
++      ionMass = Species(PartSpecies(right))%MassIC
++      center = (heavyMass*PartState(4:6,left)+ionMass*PartState(4:6,right))/(heavyMass+ionMass)
++      CALL consume(left,w)
++      CALL consume(right,w)
++      productIon = 4
++      IF (MOD(channel,2).EQ.0) productIon = 2
++      energy = excitation(a)+excitation(b)-excitation(productIon)
++      ionMass = Species(productIon)%MassIC
++      reducedMass = eMass*ionMass/(eMass+ionMass)
++      CALL JiaDirection(direction)
++      relative = SQRT(2.*energy*ElementaryCharge/reducedMass)*direction
++      CALL emit(productIon,pHeavy,center-eMass/(eMass+ionMass)*relative,w)
++      CALL emit(3,pHeavy,center+ionMass/(eMass+ionMass)*relative,w)
++    END IF
++    JiaReactionCounts(channel) = JiaReactionCounts(channel)+w
++  END DO
++END DO
++
++! Background assisted reactions with only one non-reservoir reactant.
++DO i=1,SIZE(ids)
++  id = ids(i)
++  IF (.NOT.PDM%ParticleInside(id)) CYCLE
++  spec = PartSpecies(id)
++  SELECT CASE(spec)
++  CASE(2)
++    channel = 16
++    productNeutral = 4
++    hazard = 1.1E-43*nHe**2*step
++  CASE(5)
++    channel = 23
++    productNeutral = 6
++    hazard = 2.0E-46*nHe**2*step
++  CASE DEFAULT
++    CYCLE
++  END SELECT
++  JiaMaxHazard = MAX(JiaMaxHazard,hazard)
++  CALL RANDOM_NUMBER(randomValue)
++  IF (randomValue.GE.1.-EXP(-hazard)) CYCLE
++  tempVelocity = CalcVelocity_maxwell_particle(1,[gasTemp,gasTemp,gasTemp])
++  PartState(4:6,id) = (Species(spec)%MassIC*PartState(4:6,id)+Species(1)%MassIC*tempVelocity) &
++                      /Species(productNeutral)%MassIC
++  IF (ALLOCATED(PartIntEn(id)%EElec)) PartIntEn(id)%EElec = 0.
++  PartSpecies(id) = productNeutral
++  JiaReactionCounts(channel) = JiaReactionCounts(channel)+PartMPF(id)
++END DO
++
++CONTAINS
++
++SUBROUTINE consume(part,weight)
++INTEGER, INTENT(IN) :: part
++REAL, INTENT(IN) :: weight
++IF (PartMPF(part).GT.weight) THEN
++  PartMPF(part) = PartMPF(part)-weight
++ELSE
++  CALL RemoveParticle(part)
++END IF
++END SUBROUTINE consume
++
++SUBROUTINE emit(product,pos,velo,weight)
++INTEGER, INTENT(IN) :: product
++REAL, INTENT(IN) :: pos(3), velo(3), weight
++INTEGER :: newID
++CALL CreateParticle(product,pos,globalCell,globalCell,velo,0.,0.,0.,NewPartID=newID,NewMPF=weight)
++PEM%pNext(PEM%pEnd(cell)) = newID
++PEM%pNext(newID) = 0
++PEM%pEnd(cell) = newID
++PEM%pNumber(cell) = PEM%pNumber(cell)+1
++END SUBROUTINE emit
++
++END SUBROUTINE JiaCellReactions
++
++
++REAL FUNCTION JiaStepIonization(energy,threshold,coefficient,power)
++! The Maxwellian average of this sigma(E)*v reproduces
++! coefficient*T**power*exp(-threshold/T) with E and T both in eV.
++IMPLICIT NONE
++REAL, INTENT(IN) :: energy,threshold,coefficient,power
++JiaStepIonization = 0.
++IF (energy.GT.threshold) THEN
++  JiaStepIonization = coefficient*(energy-threshold)**(power+0.5) / &
++                      (SQRT(energy)*(2./SQRT(ACOS(-1.)))*GAMMA(power+1.5))
++END IF
++END FUNCTION JiaStepIonization
++
++
++SUBROUTINE JiaDirection(direction)
++IMPLICIT NONE
++REAL, INTENT(OUT) :: direction(3)
++REAL :: u(2), angle, z
++CALL RANDOM_NUMBER(u)
++z = 2.*u(1)-1.
++angle = 2.*ACOS(-1.)*u(2)
++direction = [SQRT(1.-z*z)*COS(angle),SQRT(1.-z*z)*SIN(angle),z]
++END SUBROUTINE JiaDirection
++
++
++SUBROUTINE WriteJiaReactionCounts()
++USE MOD_DSMC_BGGas, ONLY: UseJiaChemistry
++USE MOD_TimeDisc_Vars, ONLY: time, dt, tAnalyze
++#if USE_MPI
++USE MOD_Globals, ONLY: myRank
++#endif
++IMPLICIT NONE
++INTEGER :: out, rank
++REAL :: sampleTime
++REAL, SAVE :: previous = -1.
++CHARACTER(32) :: filename
++IF (.NOT.UseJiaChemistry) RETURN
++sampleTime = time+dt
++IF (sampleTime+0.01*dt.LT.tAnalyze.OR.sampleTime.LE.previous+0.01*dt) RETURN
++previous = sampleTime
++rank = 0
++#if USE_MPI
++rank = myRank
++#endif
++WRITE(filename,'(A,I0,A)') 'JiaReactionCounts_rank',rank,'.csv'
++OPEN(NEWUNIT=out,FILE=TRIM(filename),STATUS='UNKNOWN',POSITION='APPEND',ACTION='WRITE')
++WRITE(out,'(ES24.16,24(A,ES24.16))') sampleTime,(',',JiaReactionCounts(rank),rank=1,23),',',JiaMaxHazard
++CLOSE(out)
++END SUBROUTINE WriteJiaReactionCounts
++
+ END MODULE MOD_MCC
+diff --git a/src/particles/surfacemodel/surfacemodel_SEE.f90 b/src/particles/surfacemodel/surfacemodel_SEE.f90
+index d5c25a4..039b7cc 100644
+--- a/src/particles/surfacemodel/surfacemodel_SEE.f90
++++ b/src/particles/surfacemodel/surfacemodel_SEE.f90
+@@ -1,3 +1,4 @@
++! HELIUM_OPTIONAL_ELECTRON_REFLECTION
+ !==================================================================================================================================
+ ! Copyright (c) 2010 - 2018 Prof. Claus-Dieter Munz and Prof. Stefanos Fasoulas
+ !
+@@ -43,6 +44,8 @@ USE MOD_Globals_Vars              ,ONLY: ElementaryCharge,ElectronMass
+ USE MOD_SurfaceModel_Vars         ,ONLY: BulkElectronTempSEE
+ USE MOD_SurfaceModel_Vars         ,ONLY: SurfModResultSpec,SurfModEmissionYield,SurfModEmissionEnergy,SurfModEnergyDistribution
+ USE MOD_SurfaceModel_Vars         ,ONLY: SurfModSEEFitCoeff,SurfModSEEvMPF,SurfModSEESubWorkFunc,SurfModSEEReflectElectron
++USE MOD_SurfaceModel_Vars         ,ONLY: SurfModElectronReflection
++USE MOD_DSMC_Vars                  ,ONLY: He2ElectrodeYield, He2QuartzYield
+ USE MOD_Particle_Boundary_Vars    ,ONLY: PartBound
+ USE MOD_SurfaceModel_Analyze_Vars ,ONLY: CalcElectronSEE,SEE
+ USE MOD_Particle_Analyze_Pure     ,ONLY: CalcEkinPart,CalcEkinPart2
+@@ -239,17 +242,29 @@ CASE(5) ! 5: SEE by Levko2015 for copper electrodes
+ 
+ CASE(6) ! 6: SEE by Pagonakis2016 (originally from Harrower1956)
+   CALL abort(__STAMP__,'Not implemented yet')
+-CASE(7) ! 7: SEE-I (bombarding electrons are removed, Ar+ on different materials is considered for SEE)
+-  IF(PARTISELECTRON(PartID_IN))THEN ! Bombarding electron
+-    RETURN ! nothing to do
++CASE(7) ! Constant positive-ion yield, with optional elastic electron reflection
++  IF(PARTISELECTRON(PartID_IN))THEN
++    IF(SurfModElectronReflection(locBCID).GT.0.0) THEN
++      CALL RANDOM_NUMBER(iRan)
++      IF(iRan.LT.SurfModElectronReflection(locBCID)) ProductSpec(1) = SpecID
++    END IF
++    RETURN ! original particle is reflected or absorbed; no new electron
+   ELSEIF(Species(SpecID)%ChargeIC.GT.0.0)THEN ! Positive bombarding ion
+     ! SEE-I bombarding e- are removed, Ar+ on different materials is considered for secondary e- emission (the default probability
+     ! is 0.13 probability, see  D. Depla, Magnetron sputter deposition: Linking discharge voltage with target properties, 2009)
+ 
+     ! If yield is greater than 1, store the leading integer here
+-    IF(SurfModEmissionYield(locBCID).GE.1.0) ProductSpecNbr = INT(SurfModEmissionYield(locBCID))
++    SEEYield = SurfModEmissionYield(locBCID)
++    IF(SpecID.EQ.4) THEN
++      IF(PartBound%Dielectric(locBCID)) THEN
++        IF(He2QuartzYield.GE.0.) SEEYield = He2QuartzYield
++      ELSE
++        IF(He2ElectrodeYield.GE.0.) SEEYield = He2ElectrodeYield
++      END IF
++    END IF
++    IF(SEEYield.GE.1.0) ProductSpecNbr = INT(SEEYield)
+     CALL RANDOM_NUMBER(iRan)
+-    IF(iRan.LT.MOD(SurfModEmissionYield(locBCID), 1.0) ) ProductSpecNbr = ProductSpecNbr + 1 ! Create one additional new particle
++    IF(iRan.LT.MOD(SEEYield, 1.0) ) ProductSpecNbr = ProductSpecNbr + 1 ! Create one additional new particle
+ 
+     IF(ProductSpecNbr.GT.0)THEN
+       ProductSpec(2) = SurfModResultSpec(locBCID,SpecID)  ! Species of the injected electron
+diff --git a/src/particles/surfacemodel/surfacemodel_init.f90 b/src/particles/surfacemodel/surfacemodel_init.f90
+index 8c378a1..ddc154a 100644
+--- a/src/particles/surfacemodel/surfacemodel_init.f90
++++ b/src/particles/surfacemodel/surfacemodel_init.f90
+@@ -1,3 +1,4 @@
++! HELIUM_OPTIONAL_ELECTRON_REFLECTION
+ !==================================================================================================================================
+ ! Copyright (c) 2015-2019 Wladimir Reschke
+ !
+@@ -41,6 +42,9 @@ USE MOD_ReadInTools ,ONLY: prms
+ IMPLICIT NONE
+ !==================================================================================================================================
+ CALL prms%SetSection("SurfaceModel")
++CALL prms%CreateRealOption('Part-Boundary[$]-SurfModElectronReflection', &
++ 'Electron reflection probability for ion SEE model 7; zero preserves original absorption', &
++ '0.0', numberedmulti=.TRUE.)
+ 
+ CALL prms%CreateIntOption(     'Part-Species[$]-PartBound[$]-ResultSpec'        , 'Resulting recombination species (one of nSpecies)' , '-1' , numberedmulti=.TRUE.)
+ CALL prms%CreateStringOption(  'Part-Boundary[$]-SurfModEnergyDistribution'     , 'Energy distribution function for surface emission model (only changeable for SurfaceModel=3/4/7/12/13)' , numberedmulti=.TRUE.)
+@@ -74,6 +78,7 @@ USE MOD_Particle_Boundary_Vars ,ONLY: nPartBound,PartBound
+ USE MOD_SurfaceModel_Vars      ,ONLY: BulkElectronTempSEE,SurfModSEEelectronTempAutomatic
+ USE MOD_SurfaceModel_Vars      ,ONLY: SurfModResultSpec,SurfModEnergyDistribution,SurfModEmissionEnergy,SurfModEmissionYield
+ USE MOD_SurfaceModel_Vars      ,ONLY: SurfModSEEFitCoeff,SurfModSEEvMPF,SurfModSEESubWorkFunc,SurfModSEEReflectElectron
++USE MOD_SurfaceModel_Vars      ,ONLY: SurfModElectronReflection
+ USE MOD_Particle_Vars          ,ONLY: CalcBulkElectronTemp,BulkElectronTemp
+ !-----------------------------------------------------------------------------------------------------------------------------------
+ ! IMPLICIT VARIABLE HANDLING
+@@ -113,6 +118,8 @@ SurfModSEESubWorkFunc = .TRUE.
+ ALLOCATE(SurfModSEEReflectElectron(nPartBound))
+ SurfModSEEReflectElectron = .FALSE.
+ 
++ALLOCATE(SurfModElectronReflection(nPartBound))
++SurfModElectronReflection = 0.0
+ ALLOCATE(SurfModSEEFitCoeff(1:4, 1:nPartBound))
+ SurfModSEEFitCoeff = 0
+ 
+@@ -183,6 +190,9 @@ DO iPartBound=1,nPartBound
+   ! 6: SEE by Pagonakis2016 (originally from Harrower1956)
+   ! 7: SEE-I (bombarding electrons are removed, Ar+ on different materials is considered for SEE)
+   CASE(7)
++    SurfModElectronReflection(iPartBound) = GETREAL('Part-Boundary'//TRIM(hilf2)//'-SurfModElectronReflection')
++    IF(SurfModElectronReflection(iPartBound).LT.0.0.OR.SurfModElectronReflection(iPartBound).GT.1.0) &
++      CALL abort(__STAMP__,'Electron reflection probability must lie in [0,1]')
+     ! Note that the define vars help needs to be changed as soon as these parameters are available for other surface models
+     SurfModEnergyDistribution(iPartBound) = TRIM(GETSTR('Part-Boundary'//TRIM(hilf2)//'-SurfModEnergyDistribution','deltadistribution'))
+     SurfModEmissionEnergy(iPartBound)     = GETREAL('Part-Boundary'//TRIM(hilf2)//'-SurfModEmissionEnergy','-1.0')
+@@ -264,6 +274,7 @@ SDEALLOCATE(ChemSampWall)
+ ADEALLOCATE(ChemWallProp)
+ SDEALLOCATE(SurfModEmissionEnergy)
+ SDEALLOCATE(SurfModEmissionYield)
++SDEALLOCATE(SurfModElectronReflection)
+ SDEALLOCATE(StickingCoefficientData)
+ SDEALLOCATE(SurfModSEEFitCoeff)
+ END SUBROUTINE FinalizeSurfaceModel
+diff --git a/src/particles/surfacemodel/surfacemodel_tools.f90 b/src/particles/surfacemodel/surfacemodel_tools.f90
+index 3d0d9d1..9024336 100644
+--- a/src/particles/surfacemodel/surfacemodel_tools.f90
++++ b/src/particles/surfacemodel/surfacemodel_tools.f90
+@@ -554,7 +554,8 @@ USE MOD_Part_Tools                ,ONLY: VeloFromDistribution
+ USE MOD_part_operations           ,ONLY: CreateParticle
+ USE MOD_Particle_Analyze_Pure     ,ONLY: CalcEkinPart2
+ USE MOD_Particle_Vars             ,ONLY: WriteMacroSurfaceValues,Species,usevMPF,PartMPF,PartState,PartSpecies
+-USE MOD_Particle_Vars             ,ONLY: InterPlanePartNumber, InterPlanePartIndx, PDM
++USE MOD_Particle_Vars             ,ONLY: InterPlanePartNumber, InterPlanePartIndx, PDM, PEM
++USE MOD_Symmetry_Vars             ,ONLY: Symmetry
+ USE MOD_Particle_Boundary_Tools   ,ONLY: CalcWallSample, StoreBoundaryParticleProperties
+ USE MOD_Particle_Boundary_Vars    ,ONLY: Partbound, GlobalSide2SurfSide, DoBoundaryParticleOutputHDF5
+ USE MOD_Particle_Mesh_Vars        ,ONLY: SideInfo_Shared
+@@ -639,6 +640,11 @@ DO iNewPart = 1, ProductSpecNbr
+   IF((DSMC%CalcSurfaceVal.AND.SamplingActive).OR.(DSMC%CalcSurfaceVal.AND.WriteMacroSurfaceValues)) &
+     CALL CalcWallSample(NewPartID,SurfSideID,'new',SurfaceNormal_opt=n_loc)
+   IF(TrackingMethod.EQ.TRIATRACKING) THEN
++    ! Quartz secondary starts on a known rotational boundary side.
++    ! The negative side ID selects the existing exact-rotation boundary recheck
++    ! and suppresses the round-off root at the birth point.
++    IF(Symmetry%AxisymmetricExact.AND.(PartBound%Dielectric(locBCID).OR.PartBound%SurfaceModel(locBCID).EQ.11)) &
++      PEM%LastGlobalElemID(NewPartID) = -SideID
+     ! Add newly created particles to the list of particles to track after the regular tracking loop
+     ! NOTE: Interplane functionality is only available for triatracking, requries additional tracking loop for interplane/SEE particles
+     InterPlanePartNumber = InterPlanePartNumber + 1
+diff --git a/src/particles/surfacemodel/surfacemodel_vars.f90 b/src/particles/surfacemodel/surfacemodel_vars.f90
+index efed3ad..6c95c0f 100644
+--- a/src/particles/surfacemodel/surfacemodel_vars.f90
++++ b/src/particles/surfacemodel/surfacemodel_vars.f90
+@@ -1,3 +1,4 @@
++! HELIUM_OPTIONAL_ELECTRON_REFLECTION
+ #include "piclas.h"
+ !==================================================================================================================================
+ ! Copyright (c) 2015 - 2019 Wladimir Reschke
+@@ -151,6 +152,7 @@ REAL                             :: BulkElectronTempSEE             ! Bulk elect
+                                                                     ! converted to eV for usage in the code
+ LOGICAL                          :: SurfModSEEelectronTempAutomatic ! BulkElectronTempSEE = BulkElectronTemp, which is calculated
+                                                                     ! automatically for the first species ID for electrons
++REAL, ALLOCATABLE                :: SurfModElectronReflection(:) ! probability for model 7; default zero
+ REAL, ALLOCATABLE                :: SurfModSEEFitCoeff(:,:)         !> Model coefficients (1-3: model dependent, 4: work function in eV; 1:nPartBound)
+ 
+ ! === Sticking coefficient from simple models/interpolation
+diff --git a/src/particles/tracking/particle_triatracking.f90 b/src/particles/tracking/particle_triatracking.f90
+index 676f535..46162ec 100644
+--- a/src/particles/tracking/particle_triatracking.f90
++++ b/src/particles/tracking/particle_triatracking.f90
+@@ -108,24 +108,25 @@ DO i = 1,PDM%ParticleVecLength
+     END IF
+   END IF
+ END DO ! i = 1,PDM%ParticleVecLength
+-! 2) Loop again over all inter plane particles
+-IF(InterPlanePartNumber.GT.0) THEN
+-  DO i = 1,InterPlanePartNumber
+-    InterPartID = InterPlanePartIndx(i)
+-    PDM%ParticleInside(InterPartID) = .TRUE.
+-    IF(UseRotRefSubCycling) THEN
+-      CALL SingleParticleTriaTrackingSubcycling(iPart=InterPartID,IsInterPlanePart=.TRUE.)
+-    ELSE
+-      CALL SingleParticleTriaTracking(i=InterPartID,IsInterPlanePart=.TRUE.)
+-    END IF
+-    ! Particle treatment for an axisymmetric simulation (cloning/deleting particles)
+-    IF(ParticleWeighting%PerformCloning) THEN
+-      IF(PDM%ParticleInside(InterPartID).AND.(ParticleOnProc(InterPartID))) THEN
+-        CALL AdjustParticleWeight(InterPartID,PEM%GlobalElemID(InterPartID))
+-      END IF
++! A grazing secondary can reach the wall again within the same time step.
++! Track appended entries as well as those already in the queue.
++i = 1
++DO WHILE (i.LE.InterPlanePartNumber)
++  InterPartID = InterPlanePartIndx(i)
++  PDM%ParticleInside(InterPartID) = .TRUE.
++  IF(UseRotRefSubCycling) THEN
++    CALL SingleParticleTriaTrackingSubcycling(iPart=InterPartID,IsInterPlanePart=.TRUE.)
++  ELSE
++    CALL SingleParticleTriaTracking(i=InterPartID,IsInterPlanePart=.TRUE.)
++  END IF
++  ! Particle treatment for an axisymmetric simulation (cloning/deleting particles)
++  IF(ParticleWeighting%PerformCloning) THEN
++    IF(PDM%ParticleInside(InterPartID).AND.(ParticleOnProc(InterPartID))) THEN
++      CALL AdjustParticleWeight(InterPartID,PEM%GlobalElemID(InterPartID))
+     END IF
+-  END DO ! i = 1,InterPlanePartNumber
+-END IF
++  END IF
++  i = i + 1
++END DO
+ 
+ END SUBROUTINE ParticleTriaTracking
+ 

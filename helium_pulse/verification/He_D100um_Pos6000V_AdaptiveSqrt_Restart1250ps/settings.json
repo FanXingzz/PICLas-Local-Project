@@ -1,0 +1,12 @@
+{
+  "exponent": 0.0,
+  "interval": 50,
+  "min_count": 16,
+  "max_gain": 2.0,
+  "tip_width_um": 25.0,
+  "merge_3": 100,
+  "merge_2": 100,
+  "merge_4": 100,
+  "merge_5": 100,
+  "merge_6": 100
+}

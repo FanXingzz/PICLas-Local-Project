@@ -38,7 +38,7 @@
                 </select></label>
                 <label class="check"><input type="checkbox" id="show-validation">显示验证</label>
                 <button id="rename-case" type="button" hidden disabled>重命名算例</button>
-                <button id="delete-result" type="button" disabled>删除验证</button>
+                <button id="delete-result" type="button" disabled>删除运行结果</button>
                 <button id="delete-case" type="button" hidden disabled>删除算例</button>
             </div>
             <div class="toolbar plot-controls">
@@ -112,6 +112,29 @@
             <details id="initial-section" open hidden>
                 <summary>初始粒子与界面发射</summary>
                 <div id="initial" class="form"></div>
+            </details>
+            <details id="case-weight-section" hidden>
+                <summary>正式算例宏粒子权重</summary>
+                <div id="case-weight-fields" class="form"></div>
+                <details>
+                    <summary>各物种固定合并阈值</summary>
+                    <p class="field-note">每单元、每物种。填 0 关闭该物种的合并。</p>
+                    <div id="case-merge-fields" class="form"></div>
+                </details>
+            </details>
+            <details id="adaptive-weight-section" hidden>
+                <summary>动态权重短测</summary>
+                <p class="field-note">100 μm 算例 · 1.25–1.275 ns · 6 个 MPI 进程</p>
+                <div id="adaptive-weight-fields" class="form"></div>
+                <details>
+                    <summary>固定合并阈值</summary>
+                    <p class="field-note">每单元、每物种。填 0 关闭该物种的合并。</p>
+                    <div id="adaptive-merge-fields" class="form"></div>
+                </details>
+                <div class="actions">
+                    <button id="save-adaptive-weight" type="button">保存权重参数</button>
+                    <button id="run-adaptive-weight" type="button" class="primary" disabled>运行权重短测</button>
+                </div>
             </details>
             <details id="geometry-section">
                 <summary>二维几何与网格</summary>

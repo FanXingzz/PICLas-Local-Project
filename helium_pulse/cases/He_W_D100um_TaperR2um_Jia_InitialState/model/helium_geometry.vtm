@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<VTKFile type="vtkMultiBlockDataSet" version="1.0" byte_order="LittleEndian"><vtkMultiBlockDataSet><DataSet index="0" name="BC_HV" file="BC_HV.vtu" /><DataSet index="1" name="BC_Ground" file="BC_Ground.vtu" /><DataSet index="2" name="BC_Quartz" file="BC_Quartz.vtu" /><DataSet index="3" name="BC_Outer" file="BC_Outer.vtu" /><DataSet index="4" name="Helium" file="Helium.vtu" /><DataSet index="5" name="Quartz" file="Quartz.vtu" /></vtkMultiBlockDataSet></VTKFile>

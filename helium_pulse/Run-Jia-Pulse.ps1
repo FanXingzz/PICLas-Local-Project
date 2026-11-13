@@ -1,16 +1,16 @@
 param(
     [Parameter(Mandatory)]
-    [string] $Python
+    [string] $Python,
+
+    [ValidatePattern('^[a-zA-Z0-9_-]+$')]
+    [string] $CaseName = 'He_W_D100um_TaperR2um_Jia_InitialState'
 )
 
 $ErrorActionPreference = 'Stop'
-$caseName = 'He_W_D100um_TaperR2um_Jia2023'
-$case = Join-Path $PSScriptRoot "cases/$caseName"
-$drive = $PSScriptRoot.Substring(0, 1).ToLowerInvariant()
-$linuxRoot = "/mnt/$drive/" + $PSScriptRoot.Substring(3).Replace('\', '/')
+$case = Join-Path $PSScriptRoot "cases/$CaseName"
 $run = $null
 
-& wsl.exe -d Ubuntu-24.04 -- bash "$linuxRoot/run_case.sh" 6 research "$linuxRoot/cases/$caseName" |
+& wsl.exe -d Ubuntu-24.04 --cd "$PSScriptRoot" -- bash run_case.sh 6 research "cases/$CaseName" |
     ForEach-Object {
         if ($_ -match '^RUN_DIRECTORY=.*/([^/]+)$') {
             $run = Join-Path $case "runs/$($Matches[1])"
@@ -21,7 +21,11 @@ $run = $null
     }
 $solverExit = $LASTEXITCODE
 if ($solverExit -ne 0 -or !$run) {
-    throw "PICLas run or VTU conversion failed (exit $solverExit). Check the run log."
+    throw "PICLas run failed (exit $solverExit). Check the run log."
+}
+$conversionStatus = Join-Path $run 'conversion-status.txt'
+if ((Test-Path -LiteralPath $conversionStatus) -and (Get-Content -LiteralPath $conversionStatus -Raw).Trim() -eq 'failed') {
+    Write-Warning 'The HDF5 results were saved. VTU conversion failed. See conversion.log.'
 }
 $env:PYTHONDONTWRITEBYTECODE = '1'
 & $Python -X utf8 (Join-Path $PSScriptRoot 'analyze_full_pulse.py') $run

@@ -3,6 +3,8 @@ import json
 import math
 import re
 
+from piclas_ini import parse_parameters, replace_parameters
+
 DIAMETERS = {
     "100 μm": 100.0, "50 μm": 50.0, "10 μm": 10.0,
     "1 μm": 1.0, "100 nm": 0.1, "10 nm": 0.01,
@@ -181,14 +183,6 @@ def seed_geometry(geometry):
     return side_um, offset_um, weight
 
 
-def replace_parameters(text, values):
-    for key, value in values.items():
-        text, count = re.subn(rf"^{re.escape(key)}[ \t]*=.*$", lambda _: f"{key} = {value}", text, flags=re.M)
-        if count != 1:
-            raise ValueError(f"参数文件缺少唯一的 {key}")
-    return text
-
-
 def seed_parameters(text, geometry):
     side_um, offset_um, weight = seed_geometry(geometry)
     side = side_um*1e-6
@@ -218,8 +212,9 @@ def seed_parameters(text, geometry):
             })
             extra = {prefix+"RadiusIC": f"{radius:.12g}", prefix+"Radius2IC": "0.",
                      prefix+"CylinderHeightIC": f"{side:.12g}"}
+            active = parse_parameters(text)
             for key, value in extra.items():
-                if re.search(rf"^{re.escape(key)}[ \t]*=", text, re.M):
+                if key in active:
                     text = replace_parameters(text, {key: value})
                 else:
                     text += f"\n{key} = {value}\n"
@@ -235,7 +230,7 @@ def particle_search_parameters(text, geometry):
     height = chamber_height(geometry)
     spacing = f"(/{length/110*1e-6:.12g},{width/22*1e-6:.12g},{height/20*1e-6:.12g}/)"
     key = "Part-FIBGMdeltas"
-    if re.search(rf"^{key}[ \t]*=", text, re.M):
+    if key in parse_parameters(text):
         return replace_parameters(text, {key: spacing})
     return text + f"\n! Particle lookup bins (independent of the field mesh)\n{key} = {spacing}\n"
 
@@ -253,8 +248,9 @@ def create_case(root, geometry, parameters):
             "Part-Boundary5-SourceName": "BC_Axis", "Part-Boundary5-Condition": "symmetric_axis",
             "Part-Boundary6-SourceName": "BC_Sym", "Part-Boundary6-Condition": "symmetric_dim",
         }
+        active = parse_parameters(parameters)
         for key, value in extra.items():
-            if re.search(rf"^{re.escape(key)}[ \t]*=", parameters, re.M):
+            if key in active:
                 parameters = replace_parameters(parameters, {key: value})
             else:
                 parameters += f"\n{key} = {value}\n"

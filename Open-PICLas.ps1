@@ -35,7 +35,7 @@ if ($modules -ne 'True') {
 }
 
 $ext = Join-Path $workbench 'vscode-extension'
-$version = (Get-Content -Raw -LiteralPath (Join-Path $ext 'package.json') | ConvertFrom-Json).version
+$version = (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $ext 'package.json') | ConvertFrom-Json).version
 $installed = & $code --list-extensions --show-versions
 if ($LASTEXITCODE -ne 0) { throw 'VS Code could not list installed extensions.' }
 if ($installed -notcontains "local-piclas.piclas-workbench@$version") {

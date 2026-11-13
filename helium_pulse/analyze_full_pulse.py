@@ -4,7 +4,6 @@ from array import array
 import csv
 import json
 from pathlib import Path
-import re
 
 import h5py
 import matplotlib
@@ -14,6 +13,7 @@ from matplotlib.colors import LogNorm
 import numpy as np
 
 from slice_plot import render_slice
+from piclas_ini import parse_parameters, real
 
 E_CHARGE = 1.602176634e-19
 
@@ -85,13 +85,13 @@ def validate_axisymmetric_particles(particles, geometry, frame_name):
 
 def analyze(run, allow_partial=False, assessment=None):
     if not allow_partial and (run/"run-status.txt").read_text().strip() != "complete":
-        raise ValueError("Run must finish solving and conversion before final analysis")
+        raise ValueError("Run must finish solving before final analysis")
     geometry = json.loads((run/"geometry.json").read_text())
     info_file = run/"case-info.json"
     case_info = json.loads(info_file.read_text(encoding="utf-8")) if info_file.is_file() else {}
-    parameter = {key: float(value) for key, value in re.findall(
-        r"^(PulsePeak|PulseRise|PulseFlat|PulseFall|tend|ManualTimeStep)\s*=\s*([^!\r\n]+)",
-        (run/"parameter.ini").read_text(), re.M)}
+    inputs = parse_parameters((run/"parameter.ini").read_text(encoding="utf-8-sig"))
+    parameter = {key: real(inputs[key]) for key in
+                 ("PulsePeak", "PulseRise", "PulseFlat", "PulseFall", "tend", "ManualTimeStep")}
     if geometry["mesh_method"] != "axisymmetric":
         raise ValueError("This analysis requires an axisymmetric x-r mesh")
     boundaries = ("HV", "Ground", "Quartz")
@@ -378,8 +378,6 @@ def analyze(run, allow_partial=False, assessment=None):
     pictures[0].save(run/"electron-distribution.png")
     pictures[0].save(run/"electron-evolution.gif", save_all=True, append_images=pictures[1:],
                      duration=300, loop=0)
-    if not allow_partial:
-        (Path(__file__).parent/"latest-result.txt").write_text(str(run.resolve()), encoding="utf-8")
     return summary
 
 

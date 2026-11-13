@@ -8,4 +8,4 @@
 
 [求解器源码补丁](solver-source.patch)固定到 PICLas 4.3.0 的提交 `514af4c6e5ec2a16f75db99295b34b08dfeced90`。补丁包含原六物种算例的气相反应实现，并按金属或介质边界读取各自的分子离子产额。石英二次电子从已知碰撞面进入轴对称轨迹追踪。原生介质充电同时记入吸收的入射粒子和发射电子的反号电荷。
 
-在另一台电脑上运行时，先按项目说明准备 PICLas 源码和 PETSc，再在 WSL 中执行本目录的 `bash build_solver.sh`。默认编译产物位于 `$HOME/piclas_projects/helium_jia_initial_state_workspace/build/bin/piclas`，可通过 `PICLAS_JIA_INITIAL_SOLVER_ROOT` 指定构建目录。工作台根据 `solver_profile=jia_initial_state` 选择独立求解器，并把源码补丁与二进制校验值写入运行目录。
+此模型的新运行使用 Jia 动态求解器。选择该算例后点「编译求解器」，或从氦气项目根目录在 WSL 执行 `bash solver/jia_dynamic/build_solver.sh`。实际求解器变体、源码补丁、二进制校验值及动态设置随每次运行保存。历史初态验证使用本目录记录的独立基线求解器。

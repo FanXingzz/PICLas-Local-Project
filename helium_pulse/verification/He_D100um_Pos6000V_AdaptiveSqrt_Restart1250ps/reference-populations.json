@@ -1,0 +1,30 @@
+{
+  "checkpoint_sha256": "a3e5f72f2acdad349f25213068dc3f4f50cdd09ad6da81cc2ba99efdf1ee5518",
+  "species": {
+    "2": {
+      "macros": 44062,
+      "weighted": 5021.829791442251,
+      "mean_weight": 0.11397189849399145
+    },
+    "3": {
+      "macros": 14654,
+      "weighted": 1099.3780012632806,
+      "mean_weight": 0.07502238305331517
+    },
+    "4": {
+      "macros": 1509,
+      "weighted": 118.55385060479774,
+      "mean_weight": 0.07856451332325895
+    },
+    "5": {
+      "macros": 20183,
+      "weighted": 3379.597906181212,
+      "mean_weight": 0.16744774841109902
+    },
+    "6": {
+      "macros": 256,
+      "weighted": 1891.9422561327663,
+      "mean_weight": 7.390399438018618
+    }
+  }
+}

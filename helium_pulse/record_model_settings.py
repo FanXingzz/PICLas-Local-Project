@@ -4,20 +4,9 @@ import json
 from pathlib import Path
 import re
 
+from adaptive_weight_settings import FIELDS, MERGE_FIELDS, case_settings
+from piclas_ini import Parameters, entries, real
 from tube_cases import axis_mesh_values, taper_dimensions
-
-
-def entries(text):
-    pairs = []
-    for line in text.splitlines():
-        key, separator, value = line.split("!", 1)[0].partition("=")
-        if separator:
-            pairs.append((key.strip(), value.strip()))
-    return pairs
-
-
-def real(value):
-    return float(value.lower().replace("d", "e"))
 
 
 def settings_text(directory, parameter=None, metadata=None):
@@ -25,7 +14,7 @@ def settings_text(directory, parameter=None, metadata=None):
         parameter = (directory / "parameter.ini").read_text(encoding="utf-8-sig")
     dsmc = (directory / "DSMC.ini").read_text(encoding="utf-8-sig")
     parameters = entries(parameter)
-    settings = dict(parameters + entries(dsmc))
+    settings = Parameters(parameters + entries(dsmc))
     log = next((directory/name for name in ("solver.log", "piclas_run_corrected.log")
                 if (directory/name).is_file()), None)
     log_text = log.read_text(encoding="utf-8", errors="replace") if log else ""
@@ -47,6 +36,8 @@ def settings_text(directory, parameter=None, metadata=None):
     if run_info.is_file():
         run = dict(entries(run_info.read_text(encoding="utf-8")))
         lines.append(f"运行模式 `{run.get('mode', '见运行记录')}`，MPI 进程 {run.get('mpi_ranks', '见运行记录')}。")
+        if run.get("solver_variant") == "jia_dynamic":
+            lines.append("求解器为 Jia 动态负载均衡与宏粒子权重版。")
     if (directory / "run-validation.txt").is_file():
         lines.append("该次运行带有[无效诊断标记](run-validation.txt)。")
     if metadata.get("network_status") == "draft":
@@ -99,6 +90,22 @@ def settings_text(directory, parameter=None, metadata=None):
         lines.append(f"- 介质区编号 `{settings.get('DielectricZoneID', '见输入')}`，"
                      f"相对介电常数 `{settings.get('DielectricZoneEpsR', '见输入')}`。")
 
+    if settings.get("DoLoadBalance") == "T":
+        lines.append(f"- 按实测单元耗时动态再分区。采样 {settings.get('LoadBalanceSample', '见输入')} 步，"
+                     f"偏差阈值 {settings.get('Load-DeviationThreshold', '见输入')}，"
+                     f"再分区上限 {settings.get('LoadBalanceMaxSteps', '见输入')}。")
+    editable_jia = (directory.parent.name == "cases" and not run_info.is_file()
+                    and metadata.get("solver_profile") == "jia_initial_state")
+    if editable_jia or settings.get("Part-AdaptiveVMPFTipHalfGap"):
+        weights = case_settings(settings)
+        lines.extend(["", "## 宏粒子权重", ""])
+        for key, label, *_ in FIELDS:
+            lines.append(f"- {label} {weights[key]:g}。")
+        thresholds = "、".join(f"{label} {weights[key]}" for key, label, *_ in MERGE_FIELDS)
+        lines.append(f"- 各物种的每单元固定合并阈值为 {thresholds}。")
+        if settings.get("Part-AdaptiveVMPFTipHalfGap"):
+            lines.append("- 各物种参考权重和参考数量保存于 `parameter.ini`。")
+
     lines.extend(["", "## 气相碰撞与反应", ""])
     lines.append(f"- `UseDSMC={settings.get('UseDSMC', '见输入')}`，"
                  f"`CollisMode={settings.get('Particles-DSMC-CollisMode', '见输入')}`，"
@@ -135,8 +142,8 @@ def settings_text(directory, parameter=None, metadata=None):
     field = {"BC_HV": "指定脉冲电势", "BC_Ground": "电势 0 V",
              "BC_Outer": "零法向电场", "BC_Quartz": "氦气—石英介质界面",
              "BC_Axis": "轴对称", "BC_Sym": "降维对称"}
-    overrides = [value for key, value in parameters if key == "BoundaryName"]
-    override_types = [value for key, value in parameters if key == "BoundaryType"]
+    overrides = [value for key, value in parameters if key.casefold() == "boundaryname"]
+    override_types = [value for key, value in parameters if key.casefold() == "boundarytype"]
     field.update({name: f"场边界类型 `{value}`" for name, value in zip(overrides, override_types)})
     for i in range(1, int(settings.get("Part-nBounds", "0")) + 1):
         boundary = f"Part-Boundary{i}-"
@@ -146,7 +153,7 @@ def settings_text(directory, parameter=None, metadata=None):
         if name in field:
             items.insert(0, field[name])
         absorbed = [species[int(match[1])] for key, value in parameters
-                    if key.startswith(boundary + "SpeciesSwaps")
+                    if key.casefold().startswith(boundary.casefold() + "speciesswaps")
                     and (match := re.fullmatch(r"\(/\s*(\d+)\s*,\s*0\s*/\)", value))]
         if absorbed:
             items.append("吸收 " + "、".join(absorbed))
@@ -198,7 +205,7 @@ def settings_text(directory, parameter=None, metadata=None):
         lines.append(f"- 带电粒子初始数密度（m⁻³） {values}。")
     elif metadata.get("seed_density_m3") and int(settings.get("Part-Species3-nInits", "0")):
         lines.append(f"- 记录的预电离密度 {metadata['seed_density_m3']:.4g} m⁻³。")
-    random = [value for key, value in parameters if re.fullmatch(r"Particles-RandomSeed\d+", key)]
+    random = [value for key, value in parameters if re.fullmatch(r"Particles-RandomSeed\d+", key, re.I)]
     if random:
         lines.append("- 随机种子 " + "、".join(random) + "。")
 
@@ -207,7 +214,9 @@ def settings_text(directory, parameter=None, metadata=None):
                  "CHEMISTRY_PLAN.json", "R15_SOURCE_REVIEW.md",
                  "geometry.json", "mesh.ini", "hopr.ini", "case-info.json",
                  "input-sha256.txt", "input-sha256.json",
-                 "literature-review.txt", "run-info.txt", "solver-sha256.txt", "solver-source.patch", "SOLVER_SETUP.md"):
+                 "literature-review.txt", "run-info.txt", "solver-sha256.txt", "solver-source.patch", "SOLVER_SETUP.md",
+                 "solver-build-inputs.txt", "visualization.ini", "solver-status.txt", "conversion-status.txt",
+                 "AdaptiveVMPF.csv", "ElemTimeStatistics.csv"):
         if (directory/name).is_file():
             lines.append(f"- [{name}]({name})")
     if log:

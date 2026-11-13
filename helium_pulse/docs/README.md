@@ -1,6 +1,8 @@
 # 技术文档
 
 - [研究记录](研究记录.md)
+- [原始算法与现行算法对照](原始算法.md)
+- [动态负载均衡与宏粒子权重调整说明](算法调整说明.md)
 - [网格设计与文献](MESH_DESIGN.md)
 - [管径研究与针尖尺寸](TUBE_DIAMETER_STUDY.md)
 - [石英管壁、圆头网格与氦反应](HE_WALL_CHEMISTRY_REFINEMENT.md)

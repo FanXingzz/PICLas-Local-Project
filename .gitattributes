@@ -2,9 +2,21 @@
 *.patch text eol=lf
 *.cmd text eol=crlf
 *.vsix binary
+*.h5 binary
+*.vtu binary
 
 # Keep the Jia input hashes and mesh snapshot consistent across checkouts.
 helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/*.ini text eol=lf
 helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/geometry.json text eol=lf
 helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/mesh-geometry.json text eol=lf
 helium_pulse/cases/He_W_D100um_TaperR2um_Jia_InitialState/CHEMISTRY_PLAN.json text eol=lf
+helium_pulse/cases/He_Tube2D_D10um_R200nm_Gap1mm_Custom_TaperS1um/*.ini text eol=lf
+helium_pulse/cases/He_Tube2D_D10um_R200nm_Gap1mm_Custom_TaperS1um/*.json text eol=lf
+helium_pulse/cases/He_Tube2D_D50um_R1um_Gap1mm_Custom_TaperS5um/*.ini text eol=lf
+helium_pulse/cases/He_Tube2D_D50um_R1um_Gap1mm_Custom_TaperS5um/*.json text eol=lf
+
+# The archived input manifest hashes these files byte-for-byte.
+helium_pulse/verification/He_D100um_Pos6000V_Optimized_Restart1250ps/inputs/** -text whitespace=cr-at-eol
+helium_pulse/verification/He_D100um_Pos6000V_Optimized_Restart1250ps/*/parameter.ini text eol=lf
+# Unified patch context uses a leading space on empty context lines.
+*.patch -whitespace

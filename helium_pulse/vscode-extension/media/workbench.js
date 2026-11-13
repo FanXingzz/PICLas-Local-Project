@@ -29,6 +29,7 @@ let renamingCase = false;
 let editRevision = 0;
 let checks;
 let progressRun;
+let adaptiveReady = false;
 
 function status(text, error = false) {
     element('status').textContent = text;
@@ -61,7 +62,9 @@ async function pollProgress() {
             stopped: '已停止', failed: '运行失败' };
         const formatNs = value => Number(value.toPrecision(6));
         element('run-progress-case').textContent = progress.label;
-        element('run-progress-state').textContent = labels[progress.state];
+        element('run-progress-state').textContent = progress.conversionStatus === 'running' ? '正在导出 VTU'
+            : progress.state === 'complete' && progress.conversionStatus === 'failed' ? '求解完成，VTU 导出失败'
+            : labels[progress.state];
         element('run-progress-time').textContent = progress.endNs === null ? `${formatNs(progress.currentNs)} ns`
             : `${formatNs(progress.currentNs)} / ${formatNs(progress.endNs)} ns`;
         const bar = element('run-progress-bar');
@@ -87,7 +90,7 @@ function options(select, choices) {
     select.replaceChildren(...choices.map(([value, label]) => new Option(label, value)));
 }
 
-function form(id, items, values, readOnly) {
+function form(id, items, values, readOnly, onInput = markDirty) {
     const holder = element(id);
     holder.replaceChildren();
     for (const item of items) {
@@ -95,10 +98,16 @@ function form(id, items, values, readOnly) {
         const input = document.createElement('input');
         input.type = 'number';
         input.step = item.integer ? '1' : 'any';
+        if (item.min !== undefined) input.min = item.min;
+        if (item.max !== undefined) input.max = item.max;
+        if (item.help) {
+            input.title = item.help;
+            input.setAttribute('aria-description', item.help);
+        }
         input.value = values[item.id] ?? '';
         input.dataset.key = item.id;
         input.readOnly = readOnly;
-        input.addEventListener('input', markDirty);
+        input.addEventListener('input', onInput);
         label.append(item.label, input);
         holder.append(label);
     }
@@ -175,6 +184,7 @@ function updateActions() {
     element('clone').disabled = savingModel;
     element('pulse-section').hidden = !detail?.parameters.length;
     element('initial-section').hidden = !detail?.initialFields?.length;
+    element('case-weight-section').hidden = !model?.canSaveParameters || !detail?.caseWeightFields?.length;
     element('select-model').hidden = !selection?.case || !catalog.models.some(m => m.id === selection.case);
     element('pv-result').disabled = !detail?.vtuAvailable || !field.value;
     element('pv-model').disabled = !detail?.modelAvailable;
@@ -182,6 +192,7 @@ function updateActions() {
     element('rename-case').disabled = !currentCase || renamingCase;
     element('delete-result').hidden = Boolean(model);
     element('delete-result').disabled = Boolean(model) || !selection?.deletable;
+    element('delete-result').title = selection?.deleteBlock || '将所选运行移到项目回收站';
     element('delete-case').hidden = !currentCase;
     element('delete-case').disabled = !currentCase;
     element('delete-case').title = currentCase?.deleteBlock || '将算例移到项目回收站';
@@ -198,6 +209,33 @@ function updateActions() {
     }
     document.querySelector('[data-task="export"]').disabled =
         taskRunning || !selection?.case || !detail?.frames.length;
+    updateAdaptiveActions();
+}
+
+function updateAdaptiveActions() {
+    element('save-adaptive-weight').disabled = taskRunning;
+    element('run-adaptive-weight').disabled = taskRunning || !adaptiveReady;
+}
+
+async function loadAdaptiveWeight() {
+    const { fields: controls, mergeFields = [], ready } = await request('adaptiveWeightSettings');
+    adaptiveReady = ready;
+    element('adaptive-weight-section').hidden = !controls.length;
+    form('adaptive-weight-fields', controls, Object.fromEntries(controls.map(item => [item.id, item.value])),
+        false, () => {});
+    form('adaptive-merge-fields', mergeFields, Object.fromEntries(mergeFields.map(item => [item.id, item.value])),
+        false, () => {});
+    updateAdaptiveActions();
+}
+
+function adaptiveSettings() {
+    return { ...fields('adaptive-weight-fields'), ...fields('adaptive-merge-fields') };
+}
+
+function caseWeights() {
+    if (modelSelected()?.canSaveParameters && detail?.caseWeightFields?.length) {
+        return { ...fields('case-weight-fields'), ...fields('case-merge-fields') };
+    }
 }
 
 function markDirty() {
@@ -215,11 +253,13 @@ async function loadCatalog(preferred, { keepView = false } = {}) {
         ? [...catalog.models, ...catalog.runs].find(item => item.id === selection?.id) : null;
     const showValidation = element('show-validation').checked;
     const datasets = [
-        ['正式结果', catalog.runs.filter(run => !run.validation)],
+        ['正式结果', catalog.runs.filter(run => !run.validation && !run.adaptive)],
         ['待审核模型', catalog.models.filter(model => model.review)],
         ['氦气算例', catalog.models.filter(model => !model.review &&
             (!model.validation || showValidation || model.id === keptSelection?.id))]
     ];
+    const adaptive = catalog.runs.filter(run => run.adaptive);
+    if (adaptive.length) datasets.push(['动态权重短测', adaptive]);
     if (showValidation) datasets.push(['静电及短验证', catalog.runs.filter(run => run.validation)]);
     dataset.replaceChildren(...datasets.map(([title, items]) => {
         const group = document.createElement('optgroup');
@@ -235,9 +275,9 @@ async function loadCatalog(preferred, { keepView = false } = {}) {
     }
     options(element('diameter'), [['', '自定义'], ...Object.entries(catalog.diameters).map(([l, v]) => [v, l])]);
     options(element('preset'), [['', '自定义'], ...Object.keys(catalog.meshPresets).map(name => [name, name])]);
-    const next = preferred || selection?.id || vscode.getState()?.selection || catalog.latest;
-    dataset.value = next && Array.from(dataset.options).some(option => option.value === next)
-        ? next : catalog.latest || catalog.runs[0].id;
+    const visible = new Set(Array.from(dataset.options, option => option.value));
+    dataset.value = [preferred, selection?.id, vscode.getState()?.selection, catalog.latest, catalog.runs[0].id]
+        .find(key => visible.has(key));
     await selectDataset();
 }
 
@@ -270,6 +310,10 @@ async function selectDataset() {
     element('assessment').hidden = !element('assessment').textContent;
     form('pulse', detail.parameters, Object.fromEntries(detail.parameters.map(item => [item.id, item.value])), !model);
     form('initial', detail.initialFields, Object.fromEntries(detail.initialFields.map(item => [item.id, item.value])), !model);
+    for (const [id, controls] of [['case-weight-fields', detail.caseWeightFields || []],
+                                 ['case-merge-fields', detail.caseMergeFields || []]]) {
+        form(id, controls, Object.fromEntries(controls.map(item => [item.id, item.value])), !model);
+    }
     if (model) {
         form('geometry', detail.geometryFields, detail.geometry, false);
         form('taper', detail.taperFields, detail.taperControls, false);
@@ -434,7 +478,7 @@ element('delete-result').onclick = safe(async () => {
     const moved = await request('delete', { key: selection.id });
     if (moved) {
         await loadCatalog();
-        status(`验证结果已移到 ${moved}`);
+        status(`运行结果已移到 ${moved}`);
     }
 });
 element('delete-case').onclick = safe(async () => {
@@ -497,7 +541,7 @@ element('save-parameters').onclick = safe(async () => {
     updateActions();
     try {
         await request('saveParameters', { key, draft: draft(), revision: detail.parameterRevision,
-            parameters: fields('pulse'), initial: fields('initial') });
+            parameters: fields('pulse'), initial: fields('initial'), weights: caseWeights() });
         if (selection?.id !== key) return;
         if (revision === editRevision) {
             dirty = false;
@@ -520,7 +564,7 @@ element('clone').onclick = safe(async () => {
     updateActions();
     try {
         const key = await request('clone', { key: selection.id, draft: draft(),
-            parameters: fields('pulse'), initial: fields('initial') });
+            parameters: fields('pulse'), initial: fields('initial'), weights: caseWeights() });
         await loadCatalog(key);
         status('已创建独立算例。');
     } finally {
@@ -545,6 +589,22 @@ for (const button of document.querySelectorAll('[data-task]')) {
         }
     });
 }
+element('save-adaptive-weight').onclick = safe(async () => {
+    await request('saveAdaptiveWeight', { settings: adaptiveSettings() });
+    status('已保存动态权重参数。');
+});
+element('run-adaptive-weight').onclick = safe(async () => {
+    taskRunning = true;
+    updateActions();
+    try {
+        await request('task', { name: 'adaptive', adaptive: adaptiveSettings() });
+        status('动态权重短测已启动。');
+    } catch (error) {
+        taskRunning = false;
+        updateActions();
+        throw error;
+    }
+});
 element('pv-result').onclick = safe(() => request('paraview', { key: selection.id, field: field.value }));
 element('pv-model').onclick = safe(() => request('paraview', { key: selection.id, field: '', geometry: true }));
 
@@ -553,16 +613,22 @@ window.addEventListener('message', safe(async event => {
     if (reply.event === 'taskDone') {
         taskRunning = false;
         await loadCatalog();
-        if (!dirty && reply.code === 0 && reply.case) {
-            const run = catalog.runs.find(item => item.case === reply.case && !item.label.startsWith('无效 · '));
+        let run;
+        if (!dirty && reply.code === 0 && (reply.case || reply.job === 'adaptive')) {
+            run = reply.job === 'adaptive' ? catalog.runs.find(item => item.adaptive && item.complete) :
+                catalog.runs.find(item => item.case === reply.case && item.complete &&
+                    item.kind === (reply.job === 'pilot' ? 'pilot' : '') && !item.label.startsWith('无效 · '));
             if (run) {
+                progressRun = run.id;
                 if (run.validation) element('show-validation').checked = true;
                 await loadCatalog(run.id);
             }
         }
-        const result = reply.code === 0 ? '任务已完成。' : '任务已退出，请查看 VS Code 终端。';
+        const conversionFailed = run?.conversionStatus === 'failed';
+        const result = conversionFailed ? '求解已完成，HDF5 可查看。VTU 导出失败，可重试「导出 VTU」。'
+            : reply.code === 0 ? '任务已完成。' : '任务已退出，请查看 VS Code 终端。';
         status(dirty ? result + (modelSelected()?.canSaveParameters ? ' 参数草稿已保留，可点击「保存参数」。'
-            : ' 参数草稿已保留，可另存为独立算例。') : result, reply.code !== 0);
+            : ' 参数草稿已保留，可另存为独立算例。') : result, reply.code !== 0 || conversionFailed);
         return;
     }
     const pending = requests.get(reply.id);
@@ -574,4 +640,5 @@ window.addEventListener('message', safe(async event => {
 
 plot.addEventListener('load', () => vscode.postMessage({ event: 'firstPlotLoaded' }), { once: true });
 safe(loadCatalog)();
+safe(loadAdaptiveWeight)();
 pollProgress();

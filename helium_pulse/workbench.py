@@ -2,10 +2,11 @@
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 from xml.etree import ElementTree as ET
+
+from piclas_ini import parse_parameters, real
 
 
 ROOT = Path(__file__).resolve().parent
@@ -23,9 +24,9 @@ PARAMETERS = {
 
 
 def parameter_values(text):
-    return {k.strip(): float(v.strip().removeprefix("(/").removesuffix("/)"))
-            for k, v in re.findall(r"^([^!\r\n=]+?)\s*=\s*([^!\r\n]+)", text, re.M)
-            if k.strip() in PARAMETERS}
+    parameters = parse_parameters(text)
+    return {key: real(parameters[key].removeprefix("(/").removesuffix("/)"))
+            for key in PARAMETERS if key in parameters}
 
 
 def frame_stamp(path):
@@ -61,6 +62,22 @@ def launch_paraview(series):
                       for pattern in ("ParaView*/bin/paraview.exe", "Programs/ParaView*/bin/paraview.exe")
                       for candidate in Path(folder).glob(pattern)]
         executable = next(iter(sorted(candidates, reverse=True)), None)
-    if not executable or not Path(executable).is_file():
+    if executable and Path(executable).is_file():
+        subprocess.Popen([str(executable), f"--data={series}"])
+        return
+    appdata = os.environ.get("APPDATA")
+    shortcut = next(iter(sorted(Path(appdata).glob(
+        "Microsoft/Windows/Start Menu/Programs/ParaView*/ParaView*.lnk"), reverse=True)), None) if appdata else None
+    if os.name != "nt" or not shortcut:
         raise ValueError("请安装 ParaView，或将 PICLAS_PARAVIEW 指向 paraview.exe。")
-    subprocess.Popen([str(executable), f"--data={series}"])
+    command = (
+        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:PICLAS_PARAVIEW_LINK);"
+        "if (!(Test-Path -LiteralPath $s.TargetPath)) { exit 2 };"
+        "$work=$s.WorkingDirectory;"
+        "if (!$work) { $work=Split-Path -Parent $s.TargetPath };"
+        "$arg='--data=' + [char]34 + $env:PICLAS_RESULT_SERIES + [char]34;"
+        "Start-Process -FilePath $s.TargetPath -WorkingDirectory $work -ArgumentList $arg"
+    )
+    subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                   env=dict(os.environ, PICLAS_PARAVIEW_LINK=str(shortcut), PICLAS_RESULT_SERIES=str(series)),
+                   check=True, creationflags=subprocess.CREATE_NO_WINDOW)

@@ -13,8 +13,13 @@ from tempfile import TemporaryDirectory
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
+from adaptive_weight_settings import (
+    CASE as ADAPTIVE_CASE, MERGE_FIELDS, case_settings, editor_fields, save_settings, settings_for,
+    validate, weight_parameters, write_weight_parameters,
+)
 from case_preflight import describe_case, fingerprints
-from record_model_settings import entries, record, settings_text
+from piclas_ini import parse_parameters, real
+from record_model_settings import record, settings_text
 from tube_cases import (
     AXIS_MESH_FIELDS, AXIS_MESH_PRESETS, DIAMETERS, TUBE_FIELDS, axis_mesh_values, configure_taper, format_length,
     new_case_directory, particle_search_parameters, plan_axisymmetric_tube, read_geometry, replace_parameters,
@@ -38,7 +43,7 @@ JIA_EMISSION_FIELDS = (
 
 def jia_seed_volume(params, species):
     prefix = f"Part-Species{species}-Init1-"
-    return math.pi*float(params[prefix+"RadiusIC"])**2*float(params[prefix+"CylinderHeightIC"])
+    return math.pi*real(params[prefix+"RadiusIC"])**2*real(params[prefix+"CylinderHeightIC"])
 
 
 def jia_initial_fields(params):
@@ -48,9 +53,9 @@ def jia_initial_fields(params):
     for species, name, label in JIA_SEED_SPECIES:
         prefix = f"Part-Species{species}-"
         count = int(params[prefix+"Init1-ParticleNumber"]) if params[prefix+"nInits"] == "1" else 0
-        density = count*float(params[prefix+"MacroParticleFactor"])/jia_seed_volume(params, species)
+        density = count*real(params[prefix+"MacroParticleFactor"])/jia_seed_volume(params, species)
         fields.append({"id": name, "label": f"{label} 初始密度 (m⁻³)", "value": float(f"{density:.12g}")})
-    fields.extend({"id": name, "label": label, "value": float(params[keys[0]])}
+    fields.extend({"id": name, "label": label, "value": real(params[keys[0]])}
                   for name, label, keys in JIA_EMISSION_FIELDS if keys[0] in params)
     return fields
 
@@ -82,6 +87,30 @@ def run_status(directory):
     return ""
 
 
+def conversion_status(directory):
+    path = directory/"conversion-status.txt"
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def run_delete_block(state, removable):
+    if state == "running":
+        return "此运行正在求解。"
+    return "" if removable else "此运行结果已保留。"
+
+
+def adaptive_weight_settings():
+    case = ROOT/ADAPTIVE_CASE
+    script = case/"run_short.sh"
+    values = settings_for(case) if script.is_file() else None
+    return {"fields": editor_fields(values) if values else [],
+            "mergeFields": editor_fields(values, MERGE_FIELDS) if values else [],
+            "script": relative(script), "ready": (case/"solver-sha256.txt").is_file()}
+
+
+def save_adaptive_weight(settings):
+    return save_settings(ROOT/ADAPTIVE_CASE, settings)
+
+
 def complete_log_tail(path):
     """Read recent complete lines without loading growing diagnostics files."""
     try:
@@ -96,12 +125,16 @@ def complete_log_tail(path):
 
 def run_progress(key=None):
     cases = ROOT/"cases"
+    adaptive_runs = ROOT/ADAPTIVE_CASE/"runs"
     previous = (ROOT/key).resolve() if key else None
-    if previous and (previous.parent.name != "runs" or previous.parent.parent.parent != cases):
+    if previous and previous.parent != adaptive_runs and (
+        previous.parent.name != "runs" or previous.parent.parent.parent != cases
+    ):
         previous = None
     state = run_status(previous) if previous else ""
     run = previous if state == "running" else max(
-        (item for item in cases.glob("*/runs/*") if item.is_dir() and run_status(item) == "running"),
+        (item for pattern in ("cases/*/runs/*", (ADAPTIVE_CASE/"runs/*").as_posix())
+         for item in ROOT.glob(pattern) if item.is_dir() and run_status(item) == "running"),
         key=lambda item: item.name, default=None,
     )
     if run:
@@ -112,7 +145,9 @@ def run_progress(key=None):
         return None
 
     case = run.parent.parent
-    label = case_info(case).get("display_name", case.name)
+    label = case_info(run if run.parent == adaptive_runs else case).get("display_name", case.name)
+    run_info = run/"run-info.txt"
+    start_time = real(parse_parameters(run_info.read_text()).get("restart_time_ns", "0"))*1e-9 if run_info.is_file() else 0.
     parameter_file = run/"parameter.ini"
     params = parameter_file.read_text(encoding="utf-8-sig") if parameter_file.is_file() else ""
     number = r"[0-9.EeDd+\-]+"
@@ -123,13 +158,13 @@ def run_progress(key=None):
     tail = complete_log_tail(log)
     stamps = re.findall(rf"(?im)^[ \t]*(?:iter:\s*\d+\s*time:|sim time\s*:)\s*({number})", tail)
     stamps += re.findall(rf"(?m)^[ \t]*({number}),", complete_log_tail(analysis))[-1:]
-    current = max((float(stamp.lower().replace("d", "e")) for stamp in stamps), default=0.)
+    current = max((float(stamp.lower().replace("d", "e")) for stamp in stamps), default=start_time)
     eta = None
-    if end and end > 0:
+    if end and end > start_time:
         current = end if state == "complete" else min(current, end)
         if state == "running" and current >= end * (1. - 1e-10):
             state = "saving"
-        elif state == "running" and current > 0:
+        elif state == "running" and current > start_time:
             reports = re.findall(rf"(?im)^[ \t]*Time[ \t]*=[ \t]*({number})[^\n]*?\beta[ \t]*=[ \t]*([0-9:]+)", tail)
             if reports:
                 stamp, duration = reports[-1]
@@ -139,22 +174,24 @@ def run_progress(key=None):
                 if remaining > 0:
                     eta = seconds * (end - current) / remaining
             if eta is None:
-                start = run/"run-info.txt"
-                if start.is_file():
-                    latest = max(p.stat().st_mtime for p in (start, log, analysis) if p.is_file())
-                    elapsed = latest - start.stat().st_mtime
+                if run_info.is_file():
+                    latest = max(p.stat().st_mtime for p in (run_info, log, analysis) if p.is_file())
+                    elapsed = latest - run_info.stat().st_mtime
                     if elapsed > 0:
-                        eta = elapsed * (end - current) / current
+                        eta = elapsed * (end - current) / (current - start_time)
     else:
         end = None
     return {"id": relative(run), "label": label, "state": state, "currentNs": current*1e9,
-            "endNs": end*1e9 if end else None, "percent": current/end*100 if end else None,
+            "conversionStatus": conversion_status(run),
+            "endNs": end*1e9 if end else None,
+            "percent": max(0., (current-start_time)/(end-start_time)*100) if end else None,
             "etaSeconds": round(eta) if eta is not None else None}
 
 
 def catalog():
     models = []
-    runs = [{"id": "nitrogen", "label": "氮气 · 原负流注", "case": None}]
+    runs = [{"id": "nitrogen", "label": "氮气 · 原负流注", "case": None,
+             "deleteBlock": "原始氮气结果受保护。"}]
     for directory in sorted((ROOT/"cases").iterdir()):
         if not (directory/"geometry.json").is_file() or not (directory/"parameter.ini").is_file():
             continue
@@ -178,6 +215,8 @@ def catalog():
                            "ready": mesh_ready(directory), "review": metadata.get("review_pending", False),
                            "draft": metadata.get("network_status") == "draft",
                            "canSaveParameters": metadata.get("solver_profile") == "jia_initial_state",
+                           "solverBuildScript": "solver/jia_dynamic/build_solver.sh"
+                           if metadata.get("solver_profile") == "jia_initial_state" else "build_solver.sh",
                            "running": "running" in case_runs.values(),
                            "deletable": not delete_block, "deleteBlock": delete_block,
                            "runCount": len(case_runs), "formalRunCount": formal_runs,
@@ -204,14 +243,33 @@ def catalog():
                 prefix = "未完成 · "
             else:
                 prefix = {"field-check": "静电 · ", "pilot": "短验证 · ", "smoke": "短验证 · "}.get(kind, "")
+            delete_block = run_delete_block(state, not valid or state in ("stopped", "failed")
+                                            or (complete and bool(kind)))
             runs.append({"id": relative(run), "case": model_id, "validation": bool(kind) or not valid
                          or state not in ("running", "complete", "stopped", "snapshot"),
-                         "deletable": state != "running" and (not valid or (complete and bool(kind))),
+                         "complete": complete, "kind": kind, "conversionStatus": conversion_status(run),
+                         "deletable": not delete_block, "deleteBlock": delete_block,
                          "label": f"{prefix}{label} · {run.name}"})
-    pointer = ROOT/"latest-result.txt"
-    latest = pointer.read_text(encoding="utf-8").strip() if pointer.is_file() else ""
-    latest = next((item["id"] for item in runs if latest in (item["id"], str(ROOT/item["id"]))), None)
-    return {"models": models, "runs": runs, "latest": latest,
+    for run in sorted((ROOT/ADAPTIVE_CASE/"runs").glob("*"), reverse=True):
+        if not (run/"parameter.ini").is_file() or not any(run.glob("*_State_0*.h5")):
+            continue
+        state = run_status(run)
+        label = case_info(run).get("display_name", "100 μm · 自适应权重")
+        prefix = {"running": "运行中 · ", "failed": "运行失败 · ", "stopped": "已停止 · "}.get(state, "")
+        delete_block = run_delete_block(state, state in ("complete", "failed", "stopped"))
+        runs.append({"id": relative(run), "case": None, "adaptive": True, "complete": state == "complete",
+                     "label": f"{prefix}{label} · {run.name}",
+                     "deletable": not delete_block, "deleteBlock": delete_block})
+    formal = [item for item in runs if item.get("case") and item.get("complete")
+              and not item["validation"] and "-research-" in Path(item["id"]).name]
+    latest = max(formal, key=lambda item: Path(item["id"]).name, default=None)
+    if latest is None:
+        pointer = ROOT/"latest-result.txt"
+        archived = pointer.read_text(encoding="utf-8").strip() if pointer.is_file() else ""
+        latest = next((item for item in runs if item.get("case") and not item["validation"]
+                       and archived in (item["id"], str(ROOT/item["id"]))
+                       and run_status(ROOT/item["id"]) == "snapshot"), None)
+    return {"models": models, "runs": runs, "latest": latest["id"] if latest else None,
             "meshPresets": AXIS_MESH_PRESETS, "diameters": DIAMETERS}
 
 
@@ -230,10 +288,12 @@ def describe(key):
     parameter_data = (directory/"parameter.ini").read_bytes()
     parameter_text = parameter_data.decode("utf-8-sig")
     values = parameter_values(parameter_text)
-    inputs = dict(entries(parameter_text))
+    inputs = parse_parameters(parameter_text)
     summary_file = directory/"pulse-summary.json"
     summary = json.loads(summary_file.read_text(encoding="utf-8")) if summary_file.is_file() else {}
     case = directory.parent.parent if directory.parent.name == "runs" else directory
+    weights = (case_settings(inputs) if directory.parent == ROOT/"cases"
+               and case_info(directory).get("solver_profile") == "jia_initial_state" else None)
     taper_controls = None
     if geometry:
         radius = geometry["tip_radius_um"]
@@ -255,10 +315,13 @@ def describe(key):
         "settingsAvailable": (directory/"MODEL_SETTINGS.md").is_file(),
         "reactionsAvailable": (directory/"REACTIONS.md").is_file(),
         "vtuAvailable": any(directory.glob("*_Solution_*.vtu")),
+        "conversionStatus": conversion_status(directory),
         "modelAvailable": (case/"model"/"helium_geometry.vtm").is_file(),
         "parameters": [{"id": k, "label": title, "value": round(values[k]*scale, 12)}
                        for k, (title, scale) in PARAMETERS.items() if k in values],
         "initialFields": jia_initial_fields(inputs),
+        "caseWeightFields": editor_fields(weights) if weights is not None else [],
+        "caseMergeFields": editor_fields(weights, MERGE_FIELDS) if weights is not None else [],
         "parameterRevision": hashlib.sha256(parameter_data).hexdigest(),
         "geometryFields": [{"id": key, "label": title + " (μm)"} for key, title in TUBE_FIELDS] +
                           [{"id": "tip_radius_um", "label": "针尖半径 (μm)"}],
@@ -332,20 +395,20 @@ def resize_seed(text, old, new, metadata):
     values = {}
     updated = {}
     jia_initial = metadata.get("quartz_wall_model") == "ion_induced_see"
+    original = parse_parameters(text)
     seed_species = ((2, 3, 4, 5, 6) if jia_initial else
-                    (2, 3, 5, 6) if metadata.get("network_status") == "ready" and "Particles-JiaChemistry = T" in text else (2, 3))
+                    (2, 3, 5, 6) if metadata.get("network_status") == "ready"
+                    and original.get("Particles-JiaChemistry") == "T" else (2, 3))
     allowed_inits = ("0", "1") if jia_initial else ("1",)
     for species in seed_species:
         prefix = f"Part-Species{species}-"
-        original = {line.split("=", 1)[0].strip(): line.split("=", 1)[1].split("!")[0].strip()
-                    for line in text.splitlines() if line.startswith(prefix) and "=" in line}
         if original.get(prefix+"Init1-SpaceIC") != "cylinder" or original.get(prefix+"nInits") not in allowed_inits:
             raise ValueError("这个算例的种子区域已自定义，请在参数文件中设置新几何对应的种子。")
-        radius = float(original[prefix+"Init1-RadiusIC"])*new["tube_bore_um"]/old["tube_bore_um"]
-        length = float(original[prefix+"Init1-CylinderHeightIC"])*new["tip_gap_um"]/old["tip_gap_um"]
-        start = float(original[prefix+"Init1-BasePointIC"].strip("()/").split(",")[0])
+        radius = real(original[prefix+"Init1-RadiusIC"])*new["tube_bore_um"]/old["tube_bore_um"]
+        length = real(original[prefix+"Init1-CylinderHeightIC"])*new["tip_gap_um"]/old["tip_gap_um"]
+        start = real(original[prefix+"Init1-BasePointIC"].strip("()/").split(",")[0])
         start *= new["tip_gap_um"]/old["tip_gap_um"]
-        weight = float(original[prefix+"MacroParticleFactor"])
+        weight = real(original[prefix+"MacroParticleFactor"])
         weight *= (new["tube_bore_um"]/old["tube_bore_um"])**2*new["tip_gap_um"]/old["tip_gap_um"]
         values.update({prefix+"Init1-RadiusIC": f"{radius:.13g}",
                        prefix+"Init1-CylinderHeightIC": f"{length:.13g}",
@@ -358,7 +421,7 @@ def resize_seed(text, old, new, metadata):
 
 
 def configure_jia_initial(text, requested, metadata):
-    params = dict(entries(text))
+    params = parse_parameters(text)
     defaults = jia_initial_fields(params)
     if not defaults:
         return text
@@ -384,7 +447,7 @@ def configure_jia_initial(text, requested, metadata):
                 raise ValueError(f"{name} 初始密度无法换算为有效的宏粒子权重。")
             changes[weight_key] = f"{weight:.16g}"
         if name == "e":
-            metadata["seed_weight"] = float(changes.get(weight_key, params[weight_key]))
+            metadata["seed_weight"] = real(changes.get(weight_key, params[weight_key]))
         densities[name] = density
     for name, _, keys in JIA_EMISSION_FIELDS:
         if name in values:
@@ -399,7 +462,7 @@ def configure_jia_initial(text, requested, metadata):
 
 
 def configure_pulse(text, parameters):
-    active = dict(entries(text))
+    active = parse_parameters(text)
     values = {key: float(parameters[key])/scale for key, (_, scale) in PARAMETERS.items() if key in active}
     if any(not math.isfinite(value) or value < 0 or (value == 0 and key != "PulseFlat")
            for key, value in values.items()):
@@ -477,7 +540,7 @@ def rename_case(key, name):
     return name
 
 
-def save_parameters(key, draft, parameters, revision, initial=None):
+def save_parameters(key, draft, parameters, revision, initial=None, weights=None):
     case = directory_for(key)
     if case.parent != ROOT/"cases" or case_info(case).get("solver_profile") != "jia_initial_state":
         raise ValueError("请选择 Jia 初始状态算例。")
@@ -496,6 +559,8 @@ def save_parameters(key, draft, parameters, revision, initial=None):
             raise ValueError("磁盘上的参数已更新，请重新打开算例后再保存。")
         text = configure_pulse(current.decode("utf-8-sig").replace("\r\n", "\n"), parameters)
         text = configure_jia_initial(text, initial, meta)
+        if weights is not None:
+            text = write_weight_parameters(text, parse_parameters(text), weight_parameters(validate(weights)))
         manifest = case/"input-sha256.json"
         hashes = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else fingerprints(case)
         parameter_data = text.encode("utf-8")
@@ -514,7 +579,7 @@ def save_parameters(key, draft, parameters, revision, initial=None):
     return relative(case)
 
 
-def clone(key, draft, parameters, initial=None):
+def clone(key, draft, parameters, initial=None, weights=None):
     source = directory_for(key)
     if source.parent != ROOT/"cases":
         raise ValueError("请选择一个二维氦气算例作为模板。")
@@ -524,15 +589,19 @@ def clone(key, draft, parameters, initial=None):
     proposed = draft_geometry(draft["geometry"], draft["mesh"])
     same_domain, same_mesh = same_geometry(original, proposed)
     geometry = original if same_mesh else proposed
-    text = configure_pulse((source/"parameter.ini").read_text(encoding="ascii"), parameters)
+    text = configure_pulse((source/"parameter.ini").read_text(encoding="utf-8-sig"), parameters)
     metadata = case_info(source)
     if not same_domain:
         text = particle_search_parameters(resize_seed(text, original, geometry, metadata), geometry)
     text = configure_jia_initial(text, initial, metadata)
+    if weights is not None:
+        if metadata.get("solver_profile") != "jia_initial_state":
+            raise ValueError("请选择 Jia 初始状态算例。")
+        text = write_weight_parameters(text, parse_parameters(text), weight_parameters(validate(weights)))
     case = new_case_directory(ROOT, geometry)
     metadata.pop("protect_from_deletion", None)
     metadata.update(display_name=case.name, cloned_from=relative(source))
-    (case/"parameter.ini").write_text(text, encoding="ascii")
+    (case/"parameter.ini").write_text(text, encoding="utf-8")
     geometry_text = ((source/"geometry.json").read_text(encoding="utf-8") if same_mesh
                      else json.dumps(geometry, indent=2) + "\n")
     (case/"geometry.json").write_text(geometry_text, encoding="utf-8")
@@ -574,7 +643,8 @@ def paraview(key, field, geometry=False):
 if __name__ == "__main__":
     methods = {"catalog": catalog, "describe": describe, "render": render, "clone": clone,
                "saveParameters": save_parameters, "renameCase": rename_case,
-               "paraview": paraview, "selfCheck": self_check, "runProgress": run_progress}
+               "paraview": paraview, "selfCheck": self_check, "runProgress": run_progress,
+               "adaptiveWeightSettings": adaptive_weight_settings, "saveAdaptiveWeight": save_adaptive_weight}
     for line in sys.stdin:
         request = json.loads(line)
         response = {"id": request["id"]}
